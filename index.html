@@ -1,0 +1,155 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>Earthquake Monitor</title>
+  <meta name="description" content="Live status of the ESP32 earthquake detection and response system.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2314243B'/%3E%3Cpath d='M3 17h6l2-6 3 12 3-16 3 14 2-4h7' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E">
+</head>
+<body data-state="connecting">
+  <header class="masthead">
+    <div class="wrap masthead-inner">
+      <div class="brand">
+        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 17h6l2-6 3 12 3-16 3 14 2-4h7"/></svg>
+        <div>
+          <h1 id="station-name">Earthquake Detection &amp; Response System</h1>
+          <p id="station-location" class="muted">Monitoring station</p>
+        </div>
+      </div>
+      <div class="link-status" id="link-status">
+        <span class="dot" aria-hidden="true"></span>
+        <span id="link-text">Connecting</span>
+      </div>
+    </div>
+  </header>
+
+  <main class="wrap">
+    <!-- Status -->
+    <section class="status" aria-live="polite">
+      <div class="status-text">
+        <h2 id="status-title">Connecting to the station</h2>
+        <p id="status-detail" class="status-detail">Waiting for the first reading from the sensor.</p>
+      </div>
+      <dl class="status-figures">
+        <div><dt>Vibration now</dt><dd><span id="fig-shake">—</span><small> g</small></dd></div>
+        <div><dt>Rotation now</dt><dd><span id="fig-gyro">—</span><small> °/s</small></dd></div>
+        <div><dt>Last event peak</dt><dd><span id="fig-peak">—</span><small> g</small></dd></div>
+      </dl>
+    </section>
+
+    <!-- Seismograph -->
+    <section class="seismo" aria-labelledby="seismo-h">
+      <div class="section-head">
+        <h3 id="seismo-h">Ground motion, last 60 seconds</h3>
+        <p class="muted legend"><span class="key key-trace"></span>Vibration envelope <span class="key key-limit"></span>Alarm threshold <span id="threshold-value"></span></p>
+      </div>
+      <div class="seismo-frame">
+        <canvas id="seismograph" role="img" aria-label="Seismograph of vibration over the last 60 seconds"></canvas>
+      </div>
+      <div class="seismo-scale muted" aria-hidden="true">
+        <span>−60 s</span><span>−45 s</span><span>−30 s</span><span>−15 s</span><span>now</span>
+      </div>
+    </section>
+
+    <!-- Responses -->
+    <section aria-labelledby="resp-h">
+      <div class="section-head">
+        <h3 id="resp-h">Building response</h3>
+        <p class="muted">What the system has switched on</p>
+      </div>
+      <ul class="responses">
+        <li class="resp" id="resp-buzzer">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h3l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>
+          <div><p class="resp-name">Alarm buzzers</p><p class="resp-state">—</p></div>
+        </li>
+        <li class="resp" id="resp-led">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></svg>
+          <div><p class="resp-name">Warning LED</p><p class="resp-state">—</p></div>
+        </li>
+        <li class="resp" id="resp-door">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4h9v17M3 21h18"/><path d="M14 4l5 2v15"/><circle cx="11.5" cy="12.5" r=".8"/></svg>
+          <div><p class="resp-name">Exit door</p><p class="resp-state">—</p></div>
+        </li>
+        <li class="resp" id="resp-light">
+          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>
+          <div><p class="resp-name">Emergency light</p><p class="resp-state">—</p></div>
+        </li>
+      </ul>
+    </section>
+
+    <!-- Readings + controls -->
+    <div class="split">
+      <section aria-labelledby="read-h">
+        <div class="section-head"><h3 id="read-h">Readings</h3></div>
+        <table class="readings">
+          <tbody>
+            <tr><th scope="row">Estimated intensity of last event</th><td id="r-intensity">—</td></tr>
+            <tr><th scope="row">Alarm threshold</th><td id="r-threshold">—</td></tr>
+            <tr><th scope="row">Events since start-up</th><td id="r-events">—</td></tr>
+            <tr><th scope="row">Motion sensor</th><td id="r-sensor">—</td></tr>
+            <tr><th scope="row">Wi-Fi signal</th><td id="r-rssi">—</td></tr>
+            <tr><th scope="row">Running for</th><td id="r-uptime">—</td></tr>
+            <tr><th scope="row">Last update</th><td id="r-updated">—</td></tr>
+          </tbody>
+        </table>
+      </section>
+
+      <section class="controls" aria-labelledby="ctrl-h">
+        <div class="section-head"><h3 id="ctrl-h">Controls</h3></div>
+        <div class="control">
+          <button type="button" class="btn btn-primary" id="btn-reset">Reset system</button>
+          <p class="muted">Closes the door, turns off the light, LED and buzzers, and returns to monitoring. Use it only after the building is safe.</p>
+        </div>
+        <div class="control">
+          <button type="button" class="btn" id="btn-test">Run test</button>
+          <p class="muted">Turns on every response for 5 seconds, then returns to normal by itself.</p>
+        </div>
+        <div class="control">
+          <label class="switch">
+            <input type="checkbox" id="sound-toggle">
+            <span>Sound an alert on this device when an earthquake is detected</span>
+          </label>
+        </div>
+        <p class="cmd-feedback" id="cmd-feedback" role="status"></p>
+      </section>
+    </div>
+
+    <!-- Event log -->
+    <section aria-labelledby="log-h">
+      <div class="section-head">
+        <h3 id="log-h">Event log</h3>
+        <p class="muted">Most recent first</p>
+      </div>
+      <div class="table-scroll">
+        <table class="log">
+          <thead>
+            <tr><th scope="col">Detected</th><th scope="col">Type</th><th scope="col">Duration</th><th scope="col">Peak vibration</th><th scope="col">Estimated intensity</th><th scope="col">Status</th></tr>
+          </thead>
+          <tbody id="log-body">
+            <tr class="empty"><td colspan="6">No events recorded yet. Events appear here as soon as the sensor detects shaking.</td></tr>
+          </tbody>
+        </table>
+      </div>
+    </section>
+
+    <!-- Setup notice (shown when config.js is not filled in) -->
+    <section class="setup" id="setup" hidden>
+      <h3>Connect this page to your station</h3>
+      <p>Open <code>config.js</code> in this repository and put your Firebase Realtime Database URL in <code>firebaseUrl</code>, the same one used in the ESP32 code. The README explains each step.</p>
+      <p><a class="btn" href="?demo">Preview with sample data</a></p>
+    </section>
+  </main>
+
+  <footer class="wrap footer muted">
+    <p>Intensity is estimated from the measured peak acceleration using the Modified Mercalli scale (Wald et al., 1999). On a scale model it describes the shaking at the sensor, not a real earthquake magnitude.</p>
+  </footer>
+
+  <script src="config.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
