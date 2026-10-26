@@ -44,7 +44,7 @@ const char* WIFI_SSID     = "YOUR_WIFI_NAME";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
 
 // Firebase Realtime Database URL, without a trailing slash
-const char* FIREBASE_URL  = "https://YOUR-PROJECT-default-rtdb.firebaseio.com";
+const char* FIREBASE_URL  = "https://quakeguard-earthquake-default-rtdb.europe-west1.firebasedatabase.app";
 const char* FIREBASE_AUTH = "";            // database secret, or empty (see README)
 
 // One database path per floor. Floor 1 = "/earthquake", floor 2 = "/floor2"...

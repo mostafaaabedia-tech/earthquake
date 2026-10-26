@@ -3,8 +3,8 @@
 // ---------------------------------------------------------------------------
 window.EQ_CONFIG = {
   // Same Firebase Realtime Database URL as in the ESP32 code.
-  // While it still says YOUR-PROJECT, the page runs in demo mode with sample data.
-  firebaseUrl: "https://YOUR-PROJECT-default-rtdb.firebaseio.com",
+  // Add ?demo to the page address to see sample data instead.
+  firebaseUrl: "https://quakeguard-earthquake-default-rtdb.europe-west1.firebasedatabase.app",
   auth: "",                       // leave empty when the database rules allow access
 
   buildingName: "QuakeGuard",

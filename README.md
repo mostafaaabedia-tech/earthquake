@@ -12,7 +12,11 @@ An ESP32 with an MPU6050 gyroscope/accelerometer watches for earthquakes. When i
 The alarm runs on the ESP32 itself, so it still works with no Wi-Fi.
 
 **Live page:** `https://mostafaaabedia-tech.github.io/earthquake/`
-Until `config.js` has your Firebase URL, the page runs in **demo mode** with sample data. You can also add `?demo` to the address at any time.
+**Demo with sample data:** `https://mostafaaabedia-tech.github.io/earthquake/?demo`
+
+**Firebase project:** `quakeguard-earthquake` (Realtime Database in Belgium, europe-west1)
+**Database URL:** `https://quakeguard-earthquake-default-rtdb.europe-west1.firebasedatabase.app`
+Already set in `config.js` and in the ESP32 code. Only the `earthquake/` path is readable and writable.
 
 ---
 
@@ -70,7 +74,9 @@ Also:
 - The servo door must **always open by hand** too. Never let it lock people in.
 - If you fit the MQ-2, set `GAS_SENSOR_INSTALLED = true`. It needs 60 s to warm up.
 
-## 1. Firebase
+## 1. Firebase (already done for `quakeguard-earthquake`)
+
+To make your own project instead:
 
 1. <https://console.firebase.google.com> → **Add project**.
 2. **Build → Realtime Database → Create database** (test mode).
@@ -90,12 +96,12 @@ This is fine for a school project. For a real building, use Firebase Authenticat
 ## 2. ESP32
 
 1. Arduino IDE → Boards Manager → **esp32 by Espressif**. Library Manager → **ESP32Servo**.
-2. Open `firmware/earthquake_esp32/earthquake_esp32.ino` and fill in:
+2. Open `firmware/earthquake_esp32/earthquake_esp32.ino` and fill in your Wi-Fi (the Firebase URL is already set):
 
 ```cpp
 const char* WIFI_SSID     = "your Wi-Fi";
 const char* WIFI_PASSWORD = "your password";
-const char* FIREBASE_URL  = "https://my-quake-default-rtdb.firebaseio.com";
+const char* FIREBASE_URL  = "https://quakeguard-earthquake-default-rtdb.europe-west1.firebasedatabase.app";
 const char* DB_PATH       = "/earthquake";   // floor 2: "/floor2" ...
 const char* FLOOR_NAME    = "Floor 1";
 ```
