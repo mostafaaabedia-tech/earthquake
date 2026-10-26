@@ -61,36 +61,70 @@ const levelOf = (g) => { const m = mmiFromG(g); return m < 4 ? 0 : m < 6 ? 1 : m
 const AMP = [0, 1.5, 3.5, 6];
 
 /* ======================================================== floor plan */
+// Drawn from the physical model: 5 rooms on each side of a long corridor,
+// a door from every room into the corridor, windows with red awnings on the
+// outer walls, and the emergency exit at the right end of the corridor.
+const PX = [20, 181, 304, 428, 559, 690];          // room walls (x)
+const TOP = 40, C_TOP = 183, C_BOT = 301, BOT = 440;     // outer wall, corridor walls
+const EXIT_Y = 242, EXIT = [690, EXIT_Y], SAFE = [726, 334];
+const DOOR_T = [151, 251, 357, 466, 574], DOOR_B = [153, 255, 365, 464, 576], DW = 28;
+const SVGNS = "http://www.w3.org/2000/svg";
 (function buildPlan() {
-  let h = "";
-  for (let i = 0; i < 4; i++) {
-    const x = 40 + i * 112;
-    h += `<g data-room="${i}"><rect class="room" x="${x}" y="30" width="112" height="120"/><rect class="bath" x="${x + 66}" y="36" width="40" height="62" rx="2"/><rect class="bed" x="${x + 10}" y="40" width="46" height="64" rx="3"/><rect class="pillow" x="${x + 16}" y="44" width="34" height="12" rx="3"/><text x="${x + 33}" y="128" class="rno" text-anchor="middle">${i + 1}</text></g><rect class="gap" x="${x + 62}" y="147" width="30" height="6"/><path class="door" d="M${x + 62} 150V122A28 28 0 0 1 ${x + 90} 150"/>`;
+  let rooms = "", walls = "", aw = "", doors = "";
+  for (let side = 0; side < 2; side++) {
+    const y0 = side ? C_BOT : TOP, y1 = side ? BOT : C_TOP, dxs = side ? DOOR_B : DOOR_T;
+    for (let i = 0; i < 5; i++) {
+      const x0 = PX[i], x1 = PX[i + 1], cx = (x0 + x1) / 2, n = side * 5 + i;
+      rooms += `<g class="rm" data-room="${n}"><rect class="room" x="${x0}" y="${y0}" width="${x1 - x0}" height="${y1 - y0}"/>` +
+        `<text class="rno" x="${cx}" y="${(y0 + y1) / 2 + 5}" text-anchor="middle">${n + 1}</text></g>`;
+      const dx = dxs[i];
+      doors += side
+        ? `<path class="door" d="M${dx} ${C_BOT}V${C_BOT + DW}A${DW} ${DW} 0 0 0 ${dx + DW} ${C_BOT}"/>`
+        : `<path class="door" d="M${dx} ${C_TOP}V${C_TOP - DW}A${DW} ${DW} 0 0 1 ${dx + DW} ${C_TOP}"/>`;
+      if (i > 0) {                                   // window + red awning (rooms 2-5)
+        const w = (x1 - x0) * 0.42, a0 = cx - w / 2, a1 = cx + w / 2;
+        const wy = side ? BOT : TOP;
+        walls += `<rect class="win" x="${a0}" y="${wy - 3}" width="${w}" height="6" rx="1"/>`;
+        aw += side
+          ? `<polygon class="awning" points="${a0 + 4},${BOT + 3} ${a1 + 6},${BOT + 3} ${a1 + 6},${BOT + 22} ${a0 + 4},${BOT + 15}"/>`
+          : `<polygon class="awning" points="${a0 + 4},${TOP - 3} ${a1 + 6},${TOP - 3} ${a1 + 6},${TOP - 22} ${a0 + 4},${TOP - 15}"/>`;
+      }
+    }
+    // room dividers
+    for (let i = 1; i < 5; i++) walls += `<path class="wall" pathLength="1" d="M${PX[i]} ${y0}V${y1}"/>`;
+    // corridor wall with door gaps
+    const wy = side ? C_BOT : C_TOP;
+    let x = PX[0], d = "";
+    dxs.forEach((dx) => { d += `M${x} ${wy}H${dx}`; x = dx + DW; });
+    d += `M${x} ${wy}H${PX[5]}`;
+    walls += `<path class="wall" pathLength="1" d="${d}"/>`;
   }
-  for (let i = 0; i < 4; i++) {
-    const x = 156 + i * 119;
-    h += `<g data-room="${4 + i}"><rect class="room" x="${x}" y="222" width="119" height="120"/><rect class="bath" x="${x + 6}" y="282" width="40" height="54" rx="2"/><rect class="bed" x="${x + 62}" y="268" width="46" height="64" rx="3"/><rect class="pillow" x="${x + 68}" y="318" width="34" height="10" rx="3"/><text x="${x + 26}" y="262" class="rno" text-anchor="middle">${5 + i}</text></g><rect class="gap" x="${x + 62}" y="219" width="30" height="6"/><path class="door" d="M${x + 62} 222V250A28 28 0 0 0 ${x + 90} 222"/>`;
-  }
-  h += `<g data-room="8"><rect class="room" x="40" y="222" width="116" height="96"/><rect class="bed" x="46" y="236" width="50" height="38" rx="3"/><rect class="bath" x="112" y="274" width="38" height="38" rx="2"/><text x="60" y="300" class="rno" text-anchor="middle">9</text></g><rect class="gap" x="102" y="219" width="32" height="6"/><path class="door" d="M104 222V250A28 28 0 0 0 132 222"/>`;
-  $("rooms").innerHTML = h;
-  let s = "";
-  for (let k = 0; k < 9; k++) s += `<path class="step" d="M9 ${158 + k * 7}H35"/>`;
-  $("stairsteps").innerHTML = s;
+  // outer wall with the exit opening on the right
+  walls += `<path class="wall outer" pathLength="1" d="M${PX[5]} ${EXIT_Y - 20}V${TOP}H${PX[0]}V${BOT}H${PX[5]}V${EXIT_Y + 20}"/>`;
+  $("rooms").innerHTML = rooms;
+  $("walls").innerHTML = walls;
+  $("awnings").innerHTML = aw;
+  $("doors").innerHTML = doors;
 })();
 
 // Evacuation routes (one per room) and animated dots
-const people = [], WALK = 70;
+const people = [], WALK = 75;
 (function buildRoutes() {
   const routes = [];
-  for (let i = 0; i < 4; i++) { const x = 40 + i * 112; routes.push([[x + 33, 112], [x + 77, 130], [x + 77, 172], [36, 172], [18, 186]]); }
-  for (let i = 0; i < 4; i++) { const x = 156 + i * 119; routes.push([[x + 30, 270], [x + 77, 246], [x + 77, 200], [36, 200], [18, 186]]); }
-  routes.push([[80, 296], [118, 246], [118, 200], [36, 200], [18, 186]]);
+  for (let i = 0; i < 5; i++) {
+    const c = (PX[i] + PX[i + 1]) / 2, dc = DOOR_T[i] + DW / 2;
+    routes.push([[c, 100], [dc, 160], [dc, 226], [672, 226], EXIT, [712, 270], SAFE]);
+  }
+  for (let i = 0; i < 5; i++) {
+    const c = (PX[i] + PX[i + 1]) / 2, dc = DOOR_B[i] + DW / 2;
+    routes.push([[c, 384], [dc, 324], [dc, 258], [672, 258], EXIT, [712, 270], SAFE]);
+  }
   routes.forEach((pts, i) => {
     const d = [0];
     for (let k = 1; k < pts.length; k++) d.push(d[k - 1] + Math.hypot(pts[k][0] - pts[k - 1][0], pts[k][1] - pts[k - 1][1]));
-    const el = document.createElementNS("http://www.w3.org/2000/svg", "circle");
-    el.setAttribute("r", 4); el.setAttribute("class", "person"); $("people").appendChild(el);
-    const p = { pts, d, el, delay: i * 350 }; people.push(p); place(p, 0);
+    const el = document.createElementNS(SVGNS, "circle");
+    el.setAttribute("r", 4.5); el.setAttribute("class", "person"); $("people").appendChild(el);
+    const p = { pts, d, el, delay: (i % 5) * 420 + (i >= 5 ? 200 : 0) }; people.push(p); place(p, 0);
   });
 })();
 function place(p, s) {
@@ -104,33 +138,33 @@ let run = false, tStart = 0, raf = 0;
 function step(now) {
   const el = (now - tStart) / 1000; let done = true;
   people.forEach((p) => { const s = Math.max(0, el - p.delay / 1000) * WALK; place(p, s); if (s < p.d[p.d.length - 1]) done = false; });
+  $("safezone").classList.toggle("filled", el > 3);
   if (run && !done) raf = requestAnimationFrame(step);
 }
 function evac(alarm, doorOpen) {
+  $("scene").classList.toggle("evac", alarm || run);
   if (alarm && !run) { run = true; tStart = performance.now(); raf = requestAnimationFrame(step); }
-  if (!alarm && !doorOpen && run) { run = false; cancelAnimationFrame(raf); people.forEach((p) => place(p, 0)); }
+  if (!alarm && !doorOpen && run) { run = false; cancelAnimationFrame(raf); people.forEach((p) => place(p, 0)); $("safezone").classList.remove("filled"); $("scene").classList.remove("evac"); }
 }
 
-// Your room
+// Your room (1 plan unit ≈ 6 cm, so the 670-unit building is about 40 m long)
 let mine = KEY("room") === null ? -1 : +KEY("room");
-const routeLen = (i) => people[i] ? people[i].d[people[i].d.length - 1] * 0.05 : 0;  // 1 px = 5 cm
+if (mine > 9) mine = -1;
+const routeLen = (i) => people[i] ? people[i].d[4] * 0.06 : 0;   // to the exit door
 function showRoute() {
   const l = $("myroute"), m = $("me");
-  document.querySelectorAll("[data-room]").forEach((g) => g.querySelector(".room").classList.toggle("mine", +g.dataset.room === mine));
+  document.querySelectorAll("[data-room]").forEach((g) => g.classList.toggle("mine", +g.dataset.room === mine));
   m.style.display = mine < 0 ? "none" : "";
   if (mine < 0 || !people[mine]) { l.setAttribute("points", ""); $("route").textContent = t("routePrompt"); return; }
   const p = people[mine], len = routeLen(mine);
-  l.setAttribute("points", p.pts.map((a) => a.join(",")).join(" "));
+  l.setAttribute("points", p.pts.slice(0, 5).map((a) => a.join(",")).join(" "));
   m.setAttribute("cx", p.pts[0][0]); m.setAttribute("cy", p.pts[0][1]);
+  l.classList.remove("draw"); void l.getBBox(); l.classList.add("draw");
   $("route").textContent = t("routeText", { n: mine + 1, m: Math.round(len), s: Math.round(len / 1.4) });
 }
 $("scene").addEventListener("click", (e) => {
-  const s = $("scene"), pt = s.createSVGPoint(); pt.x = e.clientX; pt.y = e.clientY;
-  const q = pt.matrixTransform(s.getScreenCTM().inverse()), x = q.x, y = q.y; let i = -1;
-  if (y >= 30 && y < 150 && x >= 40 && x < 488) i = Math.floor((x - 40) / 112);
-  else if (y > 222 && y < 342 && x >= 156 && x < 632) i = 4 + Math.floor((x - 156) / 119);
-  else if (y > 222 && y < 318 && x >= 40 && x < 156) i = 8;
-  if (i >= 0) { mine = i; SAVE("room", i); showRoute(); }
+  const g = e.target.closest && e.target.closest("[data-room]");
+  if (g) { mine = +g.dataset.room; SAVE("room", mine); showRoute(); }
 });
 
 /* ============================================================ charts */
@@ -504,7 +538,7 @@ function render(d) {
   smsHref();
   if (DEMO) $("faultbtn").textContent = t("btnFault");
 }
-function bd(id, c, txt) { const e = $(id); e.className = "bd " + c + (id === "bchart" ? " push" : ""); e.textContent = txt; }
+function bd(id, c, txt) { const e = $(id); e.className = "bd " + c + (id === "bchart" ? " push" : ""); e.textContent = txt; const sc = e.closest(".sc"); if (sc) sc.dataset.tone = c; }
 
 let vTimer = 0, bTimer = 0;
 function effects(d, on) {

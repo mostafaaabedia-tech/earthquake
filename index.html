@@ -19,7 +19,7 @@
 
 <!-- Full-screen alarm -->
 <div id="alert" role="alertdialog" aria-live="assertive" aria-labelledby="ah">
-  <div class="arrow" aria-hidden="true">←</div>
+  <div class="arrow" aria-hidden="true">→</div>
   <h2 id="ah">Follow the green lights</h2>
   <p id="ap"></p>
   <ol id="osteps" class="steps"></ol>
@@ -84,36 +84,43 @@
       <svg width="34" height="34" viewBox="0 0 34 34" role="img" aria-label="North"><circle cx="17" cy="17" r="15" fill="none" stroke="currentColor" opacity=".4"/><path d="M17 6l5 14-5-3-5 3z" fill="currentColor"/><text x="17" y="31" font-size="6" text-anchor="middle" fill="currentColor">N</text></svg>
     </div>
     <div class="scene" dir="ltr">
-      <svg id="scene" viewBox="0 0 680 350" role="img" aria-label="Floor plan with rooms on both sides of a corridor, neon lights along the corridor walls and an emergency stair door on the left">
+      <svg id="scene" class="intro" viewBox="0 0 760 480" role="img" aria-label="Floor plan of the model: five rooms on each side of a long corridor, green lights along the corridor and the emergency exit at the right end">
         <defs>
-          <filter id="glow" filterUnits="userSpaceOnUse" x="0" y="0" width="680" height="350"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="glow" filterUnits="userSpaceOnUse" x="0" y="0" width="760" height="480"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <filter id="soft" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="2"/></filter>
           <linearGradient id="sT" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#39ff7a" stop-opacity=".45"/><stop offset="1" stop-color="#39ff7a" stop-opacity="0"/></linearGradient>
           <linearGradient id="sB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#39ff7a" stop-opacity="0"/><stop offset="1" stop-color="#39ff7a" stop-opacity=".45"/></linearGradient>
+          <linearGradient id="flow" x1="0" y1="0" x2="1" y2="0"><stop offset="0" stop-color="#39ff7a" stop-opacity="0"/><stop offset=".5" stop-color="#39ff7a" stop-opacity=".5"/><stop offset="1" stop-color="#39ff7a" stop-opacity="0"/></linearGradient>
+          <pattern id="tiles" width="16" height="16" patternUnits="userSpaceOnUse"><path d="M16 0H0V16" fill="none" stroke="currentColor" stroke-opacity=".07"/></pattern>
         </defs>
         <g id="plan">
-          <rect class="corr" x="40" y="150" width="592" height="72"/>
-          <rect class="spill" x="40" y="150" width="592" height="34" fill="url(#sT)"/>
-          <rect class="spill" x="40" y="188" width="592" height="34" fill="url(#sB)"/>
-          <rect class="firewash" x="40" y="150" width="592" height="72"/>
-          <rect class="lobby" x="488" y="30" width="144" height="120"/>
-          <path class="walls" d="M488 150V30H632V222"/>
-          <path class="desk" d="M512 62A32 32 0 0 1 512 118"/>
-          <rect class="lift" x="568" y="50" width="46" height="58"/><path class="liftx" d="M568 50L614 108M614 50L568 108"/>
+          <g id="awnings"></g>
+          <rect class="slab" x="20" y="40" width="670" height="400" rx="2"/>
           <g id="rooms"></g>
-          <path class="aroute" d="M600 186H66"/><path class="ahead" d="M54 186l12-7v14z"/>
+          <rect class="corr" x="20" y="183" width="670" height="118"/>
+          <rect class="tiles" x="20" y="183" width="670" height="118" fill="url(#tiles)"/>
+          <rect class="spill" x="20" y="183" width="670" height="56" fill="url(#sT)"/>
+          <rect class="spill" x="20" y="245" width="670" height="56" fill="url(#sB)"/>
+          <rect class="flowband" x="-200" y="186" width="200" height="112" fill="url(#flow)"/>
+          <rect class="firewash" x="20" y="183" width="670" height="118"/>
+          <g id="doors"></g>
+          <g id="walls"></g>
+          <path class="aroute" d="M44 242H668"/><path class="ahead" d="M680 242l-12-7v14z"/>
+          <path class="outpath" d="M694 242C716 242 726 276 726 316"/>
+          <g id="safezone"><circle class="safe-ring" cx="726" cy="334" r="17"/><circle class="safe-dot" cx="726" cy="334" r="11"/>
+            <path class="safe-ic" d="M726 327a2.6 2.6 0 1 1 0 .1M721 340c0-4 2-6 5-6s5 2 5 6"/></g>
           <g id="people"></g>
           <polyline class="myroute" id="myroute" points=""/>
-          <circle class="me" id="me" r="6" cx="-30" cy="-30"/>
-          <rect class="neon" x="56" y="154" width="560" height="4" rx="2"/>
-          <rect class="neon" x="56" y="214" width="560" height="4" rx="2"/>
-          <path class="chase" d="M616 156H56"/><path class="chase" d="M616 216H56"/>
-          <rect class="stairs" x="4" y="150" width="36" height="72"/><g id="stairsteps"></g>
-          <rect class="leaf" x="38" y="151" width="4" height="70" rx="1"/>
-          <g class="exit"><rect x="2" y="130" width="40" height="15" rx="3"/><text x="22" y="141" text-anchor="middle">EXIT</text></g>
-          <circle class="gyro" cx="150" cy="186" r="5"><title>Gyroscope (MPU6050)</title></circle>
-          <circle class="ripple" cx="150" cy="186" r="5"/><circle class="ripple r2" cx="150" cy="186" r="5"/>
-          <g id="gasicon"><rect class="gas" x="470" y="181" width="10" height="10" rx="2"><title>Gas sensor</title></rect>
-          <path class="flame" d="M475 178C466 168 477 163 474 152C486 160 488 172 480 178Z"/></g>
+          <circle class="me" id="me" r="7" cx="-30" cy="-30"/>
+          <rect class="neon" x="34" y="188" width="642" height="4" rx="2"/>
+          <rect class="neon" x="34" y="292" width="642" height="4" rx="2"/>
+          <path class="chase" d="M34 190H676"/><path class="chase" d="M34 294H676"/>
+          <rect class="leaf" x="688" y="223" width="4" height="38" rx="1"/>
+          <g class="exit"><rect x="698" y="196" width="50" height="18" rx="3"/><text x="723" y="209" text-anchor="middle">EXIT →</text></g>
+          <circle class="gyro" cx="345" cy="242" r="6"><title>Gyroscope (MPU6050)</title></circle>
+          <circle class="ripple" cx="345" cy="242" r="6"/><circle class="ripple r2" cx="345" cy="242" r="6"/><circle class="ripple r3" cx="345" cy="242" r="6"/>
+          <g id="gasicon"><rect class="gas" x="555" y="237" width="10" height="10" rx="2"><title>Gas sensor</title></rect>
+          <path class="flame" d="M560 234C551 224 562 219 559 208C571 216 573 228 565 234Z"/></g>
         </g>
       </svg>
     </div>
