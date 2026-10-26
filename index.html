@@ -1,155 +1,309 @@
 <!doctype html>
-<html lang="en">
+<html lang="en" dir="ltr" data-theme="dark">
 <head>
-  <meta charset="utf-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1">
-  <title>Earthquake Monitor</title>
-  <meta name="description" content="Live status of the ESP32 earthquake detection and response system.">
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Public+Sans:wght@400;500;600;700;800&display=swap" rel="stylesheet">
-  <link rel="stylesheet" href="style.css">
-  <link rel="icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 32 32'%3E%3Crect width='32' height='32' rx='6' fill='%2314243B'/%3E%3Cpath d='M3 17h6l2-6 3 12 3-16 3 14 2-4h7' fill='none' stroke='%23fff' stroke-width='2.2' stroke-linejoin='round' stroke-linecap='round'/%3E%3C/svg%3E">
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<title>QuakeGuard</title>
+<meta name="description" content="QuakeGuard: live earthquake detection and building evacuation dashboard for an ESP32 + MPU6050 station.">
+<meta name="theme-color" content="#050d1a">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="QuakeGuard">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon-192.png">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<link rel="stylesheet" href="style.css">
 </head>
-<body data-state="connecting">
-  <header class="masthead">
-    <div class="wrap masthead-inner">
-      <div class="brand">
-        <svg class="brand-mark" viewBox="0 0 32 32" aria-hidden="true"><path d="M3 17h6l2-6 3 12 3-16 3 14 2-4h7"/></svg>
-        <div>
-          <h1 id="station-name">Earthquake Detection &amp; Response System</h1>
-          <p id="station-location" class="muted">Monitoring station</p>
-        </div>
-      </div>
-      <div class="link-status" id="link-status">
-        <span class="dot" aria-hidden="true"></span>
-        <span id="link-text">Connecting</span>
-      </div>
+<body data-state="ok" data-tab="dash">
+
+<!-- Full-screen alarm -->
+<div id="alert" role="alertdialog" aria-live="assertive" aria-labelledby="ah">
+  <div class="arrow" aria-hidden="true">←</div>
+  <h2 id="ah">Follow the green lights</h2>
+  <p id="ap"></p>
+  <ol id="osteps" class="steps"></ol>
+  <div class="btns">
+    <button class="primary" id="safe2" data-i18n="imSafe">I’m safe</button>
+    <button id="speak" data-i18n="hear">Hear instructions</button>
+    <button id="peek" data-i18n="showDetails">Show details</button>
+  </div>
+</div>
+
+<!-- Manager PIN -->
+<div class="modal" id="pinm" role="dialog" aria-modal="true" aria-labelledby="pinh">
+  <div class="card">
+    <h2 id="pinh" data-i18n="pinTitle">Manager PIN</h2>
+    <input id="pini" type="password" inputmode="numeric" autocomplete="off" aria-labelledby="pinh">
+    <div class="btns"><button class="primary" id="pinok" data-i18n="confirm">Confirm</button><button id="pinno" data-i18n="cancel">Cancel</button></div>
+  </div>
+</div>
+
+<header class="top">
+  <div class="brand">
+    <svg width="34" height="34" viewBox="0 0 34 24" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M1 12h7l3-9 5 18 4-14 3 5h10"/></svg>
+    <b>Quake<span>Guard</span></b>
+    <small data-i18n="brandSub">Earthquake Detection &amp; Building Evacuation Monitoring</small>
+  </div>
+  <nav id="nav" aria-label="Sections">
+    <button data-tab="dash" class="on" data-i18n="tabDash">Dashboard</button>
+    <button data-tab="map" data-i18n="tabMap">Live Map</button>
+    <button data-tab="region" data-i18n="tabRegion">Region</button>
+    <button data-tab="hist" data-i18n="tabHist">History</button>
+    <button data-tab="set" data-i18n="tabSet">Settings</button>
+  </nav>
+  <div id="conn" role="status">Connecting</div>
+</header>
+
+<div class="banners">
+  <p id="demo" class="banner info" hidden data-i18n="demoBanner"></p>
+  <p id="fault" class="banner bad" role="alert" hidden></p>
+  <div id="watch" class="banner warn" hidden><span id="watcht"></span> <button id="endwatch" class="mini" data-i18n="endWatch">End watch</button></div>
+</div>
+
+<div class="layout">
+<aside id="side">
+  <h2 data-i18n="floorsTitle">Floors</h2>
+  <ul id="flist"></ul>
+  <div class="tagline"><b data-i18n="tagTitle">Safer Buildings. Stronger Communities.</b><span data-i18n="tagText">QuakeGuard helps you detect, respond and stay safe.</span></div>
+</aside>
+
+<section id="main">
+  <div id="status" style="order:1">
+    <div class="ring" aria-hidden="true"></div>
+    <div><b id="head">All clear</b><span id="sub"></span></div>
+    <svg class="wave" viewBox="0 0 200 60" aria-hidden="true"><path d="M0 30h60l8-24 10 48 10-40 8 16h104"/></svg>
+  </div>
+  <p id="msg" style="order:1" role="status"></p>
+
+  <!-- Floor plan -->
+  <div class="card" data-t="dash map" style="order:3">
+    <div class="ph">
+      <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4h9v17M14 9h5v12M8 8h3M8 12h3M8 16h3M3 21h18"/></svg>
+      <b id="plantitle">Floor – Evacuation Plan</b>
+      <svg width="34" height="34" viewBox="0 0 34 34" role="img" aria-label="North"><circle cx="17" cy="17" r="15" fill="none" stroke="currentColor" opacity=".4"/><path d="M17 6l5 14-5-3-5 3z" fill="currentColor"/><text x="17" y="31" font-size="6" text-anchor="middle" fill="currentColor">N</text></svg>
     </div>
-  </header>
-
-  <main class="wrap">
-    <!-- Status -->
-    <section class="status" aria-live="polite">
-      <div class="status-text">
-        <h2 id="status-title">Connecting to the station</h2>
-        <p id="status-detail" class="status-detail">Waiting for the first reading from the sensor.</p>
-      </div>
-      <dl class="status-figures">
-        <div><dt>Vibration now</dt><dd><span id="fig-shake">—</span><small> g</small></dd></div>
-        <div><dt>Rotation now</dt><dd><span id="fig-gyro">—</span><small> °/s</small></dd></div>
-        <div><dt>Last event peak</dt><dd><span id="fig-peak">—</span><small> g</small></dd></div>
-      </dl>
-    </section>
-
-    <!-- Seismograph -->
-    <section class="seismo" aria-labelledby="seismo-h">
-      <div class="section-head">
-        <h3 id="seismo-h">Ground motion, last 60 seconds</h3>
-        <p class="muted legend"><span class="key key-trace"></span>Vibration envelope <span class="key key-limit"></span>Alarm threshold <span id="threshold-value"></span></p>
-      </div>
-      <div class="seismo-frame">
-        <canvas id="seismograph" role="img" aria-label="Seismograph of vibration over the last 60 seconds"></canvas>
-      </div>
-      <div class="seismo-scale muted" aria-hidden="true">
-        <span>−60 s</span><span>−45 s</span><span>−30 s</span><span>−15 s</span><span>now</span>
-      </div>
-    </section>
-
-    <!-- Responses -->
-    <section aria-labelledby="resp-h">
-      <div class="section-head">
-        <h3 id="resp-h">Building response</h3>
-        <p class="muted">What the system has switched on</p>
-      </div>
-      <ul class="responses">
-        <li class="resp" id="resp-buzzer">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 9h3l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg>
-          <div><p class="resp-name">Alarm buzzers</p><p class="resp-state">—</p></div>
-        </li>
-        <li class="resp" id="resp-led">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="4"/><path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6 7 7M17 17l1.4 1.4M5.6 18.4 7 17M17 7l1.4-1.4"/></svg>
-          <div><p class="resp-name">Warning LED</p><p class="resp-state">—</p></div>
-        </li>
-        <li class="resp" id="resp-door">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M5 21V4h9v17M3 21h18"/><path d="M14 4l5 2v15"/><circle cx="11.5" cy="12.5" r=".8"/></svg>
-          <div><p class="resp-name">Exit door</p><p class="resp-state">—</p></div>
-        </li>
-        <li class="resp" id="resp-light">
-          <svg viewBox="0 0 24 24" aria-hidden="true"><path d="M9 18h6M10 21h4"/><path d="M12 3a6 6 0 0 0-3.5 10.9c.6.5 1 1.2 1 2V16h5v-.1c0-.8.4-1.5 1-2A6 6 0 0 0 12 3z"/></svg>
-          <div><p class="resp-name">Emergency light</p><p class="resp-state">—</p></div>
-        </li>
-      </ul>
-    </section>
-
-    <!-- Readings + controls -->
-    <div class="split">
-      <section aria-labelledby="read-h">
-        <div class="section-head"><h3 id="read-h">Readings</h3></div>
-        <table class="readings">
-          <tbody>
-            <tr><th scope="row">Estimated intensity of last event</th><td id="r-intensity">—</td></tr>
-            <tr><th scope="row">Alarm threshold</th><td id="r-threshold">—</td></tr>
-            <tr><th scope="row">Events since start-up</th><td id="r-events">—</td></tr>
-            <tr><th scope="row">Motion sensor</th><td id="r-sensor">—</td></tr>
-            <tr><th scope="row">Wi-Fi signal</th><td id="r-rssi">—</td></tr>
-            <tr><th scope="row">Running for</th><td id="r-uptime">—</td></tr>
-            <tr><th scope="row">Last update</th><td id="r-updated">—</td></tr>
-          </tbody>
-        </table>
-      </section>
-
-      <section class="controls" aria-labelledby="ctrl-h">
-        <div class="section-head"><h3 id="ctrl-h">Controls</h3></div>
-        <div class="control">
-          <button type="button" class="btn btn-primary" id="btn-reset">Reset system</button>
-          <p class="muted">Closes the door, turns off the light, LED and buzzers, and returns to monitoring. Use it only after the building is safe.</p>
-        </div>
-        <div class="control">
-          <button type="button" class="btn" id="btn-test">Run test</button>
-          <p class="muted">Turns on every response for 5 seconds, then returns to normal by itself.</p>
-        </div>
-        <div class="control">
-          <label class="switch">
-            <input type="checkbox" id="sound-toggle">
-            <span>Sound an alert on this device when an earthquake is detected</span>
-          </label>
-        </div>
-        <p class="cmd-feedback" id="cmd-feedback" role="status"></p>
-      </section>
+    <div class="scene" dir="ltr">
+      <svg id="scene" viewBox="0 0 680 350" role="img" aria-label="Floor plan with rooms on both sides of a corridor, neon lights along the corridor walls and an emergency stair door on the left">
+        <defs>
+          <filter id="glow" filterUnits="userSpaceOnUse" x="0" y="0" width="680" height="350"><feGaussianBlur stdDeviation="3.5" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+          <linearGradient id="sT" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#39ff7a" stop-opacity=".45"/><stop offset="1" stop-color="#39ff7a" stop-opacity="0"/></linearGradient>
+          <linearGradient id="sB" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="#39ff7a" stop-opacity="0"/><stop offset="1" stop-color="#39ff7a" stop-opacity=".45"/></linearGradient>
+        </defs>
+        <g id="plan">
+          <rect class="corr" x="40" y="150" width="592" height="72"/>
+          <rect class="spill" x="40" y="150" width="592" height="34" fill="url(#sT)"/>
+          <rect class="spill" x="40" y="188" width="592" height="34" fill="url(#sB)"/>
+          <rect class="firewash" x="40" y="150" width="592" height="72"/>
+          <rect class="lobby" x="488" y="30" width="144" height="120"/>
+          <path class="walls" d="M488 150V30H632V222"/>
+          <path class="desk" d="M512 62A32 32 0 0 1 512 118"/>
+          <rect class="lift" x="568" y="50" width="46" height="58"/><path class="liftx" d="M568 50L614 108M614 50L568 108"/>
+          <g id="rooms"></g>
+          <path class="aroute" d="M600 186H66"/><path class="ahead" d="M54 186l12-7v14z"/>
+          <g id="people"></g>
+          <polyline class="myroute" id="myroute" points=""/>
+          <circle class="me" id="me" r="6" cx="-30" cy="-30"/>
+          <rect class="neon" x="56" y="154" width="560" height="4" rx="2"/>
+          <rect class="neon" x="56" y="214" width="560" height="4" rx="2"/>
+          <path class="chase" d="M616 156H56"/><path class="chase" d="M616 216H56"/>
+          <rect class="stairs" x="4" y="150" width="36" height="72"/><g id="stairsteps"></g>
+          <rect class="leaf" x="38" y="151" width="4" height="70" rx="1"/>
+          <g class="exit"><rect x="2" y="130" width="40" height="15" rx="3"/><text x="22" y="141" text-anchor="middle">EXIT</text></g>
+          <circle class="gyro" cx="150" cy="186" r="5"><title>Gyroscope (MPU6050)</title></circle>
+          <circle class="ripple" cx="150" cy="186" r="5"/><circle class="ripple r2" cx="150" cy="186" r="5"/>
+          <g id="gasicon"><rect class="gas" x="470" y="181" width="10" height="10" rx="2"><title>Gas sensor</title></rect>
+          <path class="flame" d="M475 178C466 168 477 163 474 152C486 160 488 172 480 178Z"/></g>
+        </g>
+      </svg>
     </div>
+    <p class="cap" data-i18n="planCap">Tap your room to see your route.</p>
+  </div>
 
-    <!-- Event log -->
-    <section aria-labelledby="log-h">
-      <div class="section-head">
-        <h3 id="log-h">Event log</h3>
-        <p class="muted">Most recent first</p>
-      </div>
-      <div class="table-scroll">
-        <table class="log">
-          <thead>
-            <tr><th scope="col">Detected</th><th scope="col">Type</th><th scope="col">Duration</th><th scope="col">Peak vibration</th><th scope="col">Estimated intensity</th><th scope="col">Status</th></tr>
-          </thead>
-          <tbody id="log-body">
-            <tr class="empty"><td colspan="6">No events recorded yet. Events appear here as soon as the sensor detects shaking.</td></tr>
-          </tbody>
-        </table>
-      </div>
-    </section>
+  <!-- Intensity -->
+  <div class="card" data-t="dash" style="order:4">
+    <h2 data-i18n="mmiTitle">Shaking intensity</h2>
+    <div class="mmi">
+      <div class="mmi-now"><span class="mmi-roman" id="mmir">I</span><div><small data-i18n="mmiNow">Now</small><strong id="mmil">Not felt</strong></div></div>
+      <div class="mmi-peak"><small data-i18n="mmiPeak">Last event peak</small><strong id="mmip">—</strong></div>
+    </div>
+    <div class="mmi-scale" id="mmiscale" aria-hidden="true"></div>
+    <p class="cap" data-i18n="mmiCap"></p>
+  </div>
 
-    <!-- Setup notice (shown when config.js is not filled in) -->
-    <section class="setup" id="setup" hidden>
-      <h3>Connect this page to your station</h3>
-      <p>Open <code>config.js</code> in this repository and put your Firebase Realtime Database URL in <code>firebaseUrl</code>, the same one used in the ESP32 code. The README explains each step.</p>
-      <p><a class="btn" href="?demo">Preview with sample data</a></p>
-    </section>
-  </main>
+  <!-- Vibration -->
+  <div class="card" data-t="dash hist" style="order:5">
+    <h2><span data-i18n="vibTitle">Floor Vibration</span> <span id="bchart" class="bd ok push">Steady</span></h2>
+    <canvas id="chart" aria-label="Vibration over the last 60 seconds" role="img"></canvas>
+    <p class="cap" id="vibcap"></p>
+  </div>
 
-  <footer class="wrap footer muted">
-    <p>Intensity is estimated from the measured peak acceleration using the Modified Mercalli scale (Wald et al., 1999). On a scale model it describes the shaking at the sensor, not a real earthquake magnitude.</p>
-  </footer>
+  <!-- People -->
+  <div class="card" data-t="dash map" style="order:6">
+    <h2 data-i18n="peopleTitle">People on this floor</h2>
+    <dl><dt data-i18n="markedSafeLbl">Marked safe</dt><dd id="safen">-</dd></dl>
+    <div class="btns"><button class="primary" id="safe" data-i18n="imSafe">I’m safe</button></div>
+  </div>
 
-  <script src="config.js"></script>
-  <script src="app.js"></script>
+  <div class="card" data-t="map" style="order:7">
+    <h2 data-i18n="roomTitle">Your room</h2>
+    <p id="route" class="m0"></p>
+  </div>
+
+  <div class="card" data-t="dash" style="order:8">
+    <h2 id="stepsh">Be ready</h2>
+    <ol class="steps" id="steps"></ol>
+  </div>
+
+  <!-- Region map -->
+  <div class="card" data-t="region" style="order:3">
+    <h2 id="regiontitle">Recent earthquakes</h2>
+    <div class="filters">
+      <label><span data-i18n="fRadius">Distance</span>
+        <select id="fradius"><option value="300">300 km</option><option value="500">500 km</option><option value="1000">1,000 km</option><option value="2000">2,000 km</option></select></label>
+      <label><span data-i18n="fMag">Magnitude</span>
+        <select id="fmag"><option value="2.5">M 2.5+</option><option value="4">M 4+</option><option value="4.5">M 4.5+</option><option value="5.5">M 5.5+</option></select></label>
+      <label><span data-i18n="fDays">Period</span>
+        <select id="fdays"><option value="7" data-i18n="days7">7 days</option><option value="30" data-i18n="days30">30 days</option><option value="365" data-i18n="days365">1 year</option></select></label>
+    </div>
+    <div id="qmap" dir="ltr"></div>
+    <div class="legend">
+      <span><i class="dot" style="background:#ff5a3c"></i><span data-i18n="depShallow"></span></span>
+      <span><i class="dot" style="background:#ffb020"></i><span data-i18n="depMid"></span></span>
+      <span><i class="dot" style="background:#4fb4ff"></i><span data-i18n="depDeep"></span></span>
+    </div>
+    <p class="cap" id="regionsrc"></p>
+  </div>
+
+  <div class="card" data-t="region" style="order:4">
+    <h2 data-i18n="herTitle">Why this matters</h2>
+    <p class="m0" data-i18n="herText"></p>
+    <p class="cap" data-i18n="herSrc"></p>
+  </div>
+
+  <!-- STA/LTA -->
+  <div class="card" data-t="hist" style="order:6">
+    <h2 data-i18n="staTitle">Trigger ratio (STA/LTA)</h2>
+    <canvas id="stachart" role="img" aria-label="Trigger ratio over the last 2 minutes"></canvas>
+    <p class="cap" id="stacap"></p>
+  </div>
+
+  <div class="card" data-t="set" style="order:9">
+    <h2><span data-i18n="healthTitle">Sensor health</span>: <span id="hs">-</span></h2>
+    <dl id="hl"></dl>
+    <p class="cap" data-i18n="healthCap"></p>
+  </div>
+  <div class="card" data-t="set" style="order:10">
+    <h2 data-i18n="detTitle">Detector settings</h2>
+    <form id="detform" class="det">
+      <label><span data-i18n="detMinG">Minimum shaking (g)</span><input name="minG" type="number" step="0.005" min="0.005" max="1.5" required></label>
+      <label><span data-i18n="detTrig">Trigger ratio</span><input name="staTrig" type="number" step="0.1" min="1.2" max="20" required></label>
+      <label><span data-i18n="detDetrig">Detrigger ratio</span><input name="staDetrig" type="number" step="0.1" min="1" max="10" required></label>
+      <label><span data-i18n="detDur">Minimum duration (s)</span><input name="minDur" type="number" step="0.1" min="0.1" max="10" required></label>
+      <label><span data-i18n="detQuiet">Quiet time (s)</span><input name="quiet" type="number" step="1" min="3" max="600" required></label>
+      <label><span data-i18n="detGas">Gas alarm level</span><input name="gasLimit" type="number" step="10" min="100" max="4095" required></label>
+      <div class="btns full"><button class="primary" type="submit" data-i18n="detSave">Save settings</button><button type="button" id="calib" data-i18n="detCalib">Calibrate sensor</button></div>
+    </form>
+    <p class="cap" data-i18n="detCap"></p>
+  </div>
+  <div class="card" data-t="set" style="order:11">
+    <h2 data-i18n="ctTitle">Emergency contacts</h2>
+    <div id="ct"></div>
+    <a class="callb big" id="sms" data-i18n="smsMgr">Text the manager my situation</a>
+    <p class="cap" data-i18n="ctCap"></p>
+  </div>
+  <div class="card" data-t="hist" style="order:11">
+    <h2 data-i18n="tlTitle">Alarm timeline</h2>
+    <p id="timer" class="timer">No alarm</p>
+    <ul class="evs" id="tl"></ul>
+    <p class="cap" data-i18n="tlCap"></p>
+  </div>
+</section>
+
+<section id="right">
+  <div class="card" data-t="dash map hist set" style="order:2">
+    <h2 data-i18n="selectFloor">Select Floor</h2>
+    <div class="fchips" id="fchips"></div>
+  </div>
+
+  <div class="card" data-t="region" style="order:5">
+    <h2 id="qcount" data-i18n="regionLoading">Loading earthquakes…</h2>
+    <ul class="qlist" id="qlist"></ul>
+    <p class="cap" data-i18n="regionCap"></p>
+  </div>
+
+  <div class="card" data-t="dash" style="order:4">
+    <h2 data-i18n="sensorTitle">Sensor Status</h2>
+    <div class="sc"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></div><div><small data-i18n="sVib">Vibration</small><strong id="vib">-</strong></div><span id="bv" class="bd ok">Steady</span></div>
+    <div class="sc" id="gascard"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/></svg></div><div><small data-i18n="sGas">Gas Sensor</small><strong id="gas">-</strong></div><span id="bg" class="bd ok">Normal</span></div>
+    <div class="sc"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10c1 1 1 2 1 3h6c0-1 0-2 1-3a6 6 0 0 0-4-10z"/></svg></div><div><small data-i18n="sLights">Corridor Lights</small><strong id="neon">-</strong></div><span id="bn" class="bd mute">Normal</span></div>
+    <div class="sc"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 21V4h12v17M3 21h18M14 12h.01"/></svg></div><div><small data-i18n="sDoor">Emergency Door</small><strong id="doorv">-</strong></div><span id="bd2" class="bd ok">Secure</span></div>
+    <div class="sc"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h3l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg></div><div><small data-i18n="sBuzz">Buzzers &amp; LED</small><strong id="buzz">-</strong></div><span id="bb" class="bd mute">Silent</span></div>
+    <div class="sc"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20h18M5 20l12-14M17 6v6"/></svg></div><div><small data-i18n="sTilt">Tilt since calibration</small><strong id="tilt">-</strong></div><span id="bt" class="bd ok">Level</span></div>
+  </div>
+
+  <div class="card" data-t="dash set" style="order:5">
+    <h2 data-i18n="ctrlTitle">Controls</h2>
+    <div class="btns">
+      <button class="primary" id="reset" data-i18n="btnReset">Reset alarm</button>
+      <button id="test" data-i18n="btnTestQuake">Test earthquake alarm</button>
+      <button id="firebtn" data-i18n="btnTestFire">Test fire alarm</button>
+      <button id="faultbtn" data-i18n="btnFault" hidden>Simulate sensor fault</button>
+      <button id="snd">Sound: off</button>
+    </div>
+  </div>
+
+
+
+
+  <div class="card" data-t="hist" style="order:12">
+    <h2 data-i18n="dataTitle">Collected data</h2>
+    <dl><dt data-i18n="dQuakes">Earthquakes</dt><dd id="sq">-</dd><dt data-i18n="dFires">Gas alarms</dt><dd id="sf">-</dd><dt data-i18n="dStrongest">Strongest shaking</dt><dd id="sp">-</dd><dt data-i18n="dLast">Last alarm</dt><dd id="sl">-</dd></dl>
+    <ul class="evs" id="evs"></ul>
+  </div>
+
+  <div class="card" data-t="hist" style="order:13">
+    <h2 data-i18n="dlTitle">Download data</h2>
+    <div class="btns"><button id="dlcsv" data-i18n="dlCsv">Events (CSV)</button><button id="dljson" data-i18n="dlJson">Events (JSON)</button><button id="dltrace" data-i18n="dlTrace">Last 60 s of vibration (CSV)</button></div>
+  </div>
+
+  <div class="card" data-t="set" style="order:13">
+    <h2 data-i18n="prefTitle">This device</h2>
+    <div class="btns mt0">
+      <button id="lang">زبان: دری</button>
+      <button id="notif">Notifications: off</button>
+      <button id="voice">Voice: off</button>
+      <button id="theme">Theme</button>
+      <button id="big">Large text</button>
+    </div>
+    <p class="cap" data-i18n="notifCap"></p>
+  </div>
+
+  <div class="card" data-t="set" style="order:14">
+    <h2 data-i18n="shareTitle">Share and print</h2>
+    <div class="share">
+      <div id="qr" class="qr" aria-hidden="true"></div>
+      <div><p class="m0" data-i18n="qrCap">Scan to open this page.</p>
+        <div class="btns"><button id="print" data-i18n="printPlan">Print evacuation plan</button><button id="install" data-i18n="installApp" hidden>Install app</button></div></div>
+    </div>
+  </div>
+</section>
+</div>
+
+<footer class="foot" data-i18n="footer"></footer>
+
+<!-- Printed evacuation plan -->
+<section id="printout" aria-hidden="true">
+  <h1 id="ptitle"></h1>
+  <div id="pplan"></div>
+  <div class="pcols">
+    <div><h2 id="psteps1"></h2><ol id="plist1"></ol><h2 id="psteps2"></h2><ol id="plist2"></ol></div>
+    <div><h2 data-i18n="printNums">Emergency numbers</h2><ul id="pnums"></ul><div id="pqr"></div></div>
+  </div>
+</section>
+
+<script src="config.js"></script>
+<script src="i18n.js"></script>
+<script src="app.js"></script>
 </body>
 </html>

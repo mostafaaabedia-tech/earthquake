@@ -1,15 +1,30 @@
 // ---------------------------------------------------------------------------
-//  Web page settings
-//  Put the SAME Firebase Realtime Database URL that is in the ESP32 code.
+//  QuakeGuard web page settings
 // ---------------------------------------------------------------------------
 window.EQ_CONFIG = {
-  // Example: "https://my-quake-project-default-rtdb.firebaseio.com"
+  // Same Firebase Realtime Database URL as in the ESP32 code.
+  // While it still says YOUR-PROJECT, the page runs in demo mode with sample data.
   firebaseUrl: "https://YOUR-PROJECT-default-rtdb.firebaseio.com",
+  auth: "",                       // leave empty when the database rules allow access
 
-  // Leave empty when the database rules allow access (see README)
-  auth: "",
+  buildingName: "QuakeGuard",
 
-  // Name shown at the top of the page
-  stationName: "Earthquake Detection & Response System",
-  location: "Monitoring station"
+  // One entry per floor. "path" must match DB_PATH in that floor's ESP32 code.
+  floors: [
+    { name: "Floor 1", path: "earthquake" }
+    // , { name: "Floor 2", path: "floor2" }
+  ],
+
+  peoplePerFloor: 20,             // for the "marked safe" counter
+
+  // PIN for reset, tests and detector settings.
+  // It stops accidental presses only; anyone can read this file.
+  managerPin: "1234",
+
+  // Station position for the regional earthquake map (Herat by default)
+  station: { lat: 34.35, lon: 62.20, place: "Herat" },
+  region: { radiusKm: 1000, minMag: 4, days: 30 },
+
+  // Default emergency numbers (each phone can change them in Settings)
+  contacts: { police: "119", amb: "102", fire: "112", mgr: "" }
 };

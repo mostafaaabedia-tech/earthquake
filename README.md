@@ -1,17 +1,37 @@
-# Earthquake Detection & Response System
+# QuakeGuard — Earthquake Detection & Building Evacuation
 
-An ESP32 with an MPU6050 gyroscope/accelerometer watches for earthquake-like shaking. When it detects one it:
+An ESP32 with an MPU6050 gyroscope/accelerometer watches for earthquakes. When it detects one it:
 
-- sounds **two buzzers** (siren pattern)
+- sounds **two buzzers** (siren)
 - turns on the **warning LED**
 - rotates the **servo to open the exit door**
-- switches the **relay to turn on the emergency light**
-- sends the event to **Firebase**, where this repository's **web page** shows it live
+- switches the **relay to turn on the emergency / corridor light**
+- sends the event to **Firebase**, where the **QuakeGuard web page** shows it live
+- optionally sends a **Telegram** or **ntfy** message to your phone
 
-The alarm reacts on the ESP32 itself, so it works even with no Wi-Fi. The web page is only for watching and for remote reset/test.
+The alarm runs on the ESP32 itself, so it still works with no Wi-Fi.
 
 **Live page:** `https://mostafaaabedia-tech.github.io/earthquake/`
-**Preview with sample data:** `https://mostafaaabedia-tech.github.io/earthquake/?demo`
+Until `config.js` has your Firebase URL, the page runs in **demo mode** with sample data. You can also add `?demo` to the address at any time.
+
+---
+
+## Web page features
+
+| Tab | What it does |
+|---|---|
+| **Dashboard** | Big status banner, animated **floor plan** (green corridor lights, opening stair door, evacuation route), **shaking intensity** (Mercalli I–X), vibration chart, sensor status cards, **I'm safe** counter, what-to-do steps, controls |
+| **Live Map** | Floor plan only. Tap your room to see your route, distance and walking time to the stairs |
+| **Region** | Map of **real recent earthquakes** near Herat (USGS, with EMSC as backup) on OpenStreetMap, with magnitude, depth, distance and links. Background on the 2023 Herat earthquakes |
+| **History** | Vibration chart, **STA/LTA trigger chart**, alarm timeline, event log with **"Was it a real earthquake?"** (checks the USGS catalog), **CSV/JSON download** |
+| **Settings** | **Detector settings** that the ESP32 reads from Firebase (no re-flashing), sensor calibration, sensor health, emergency contacts with tap-to-call and SMS, notifications, voice, theme, large text, **دری / English**, QR code, **printable evacuation plan**, install as an app |
+
+Also:
+- a **full-screen alarm** ("Follow the green lights"), spoken instructions, phone vibration and siren sound
+- a **manager PIN** for reset, tests and settings
+- **several floors** (one ESP32 per floor)
+- a **24-hour aftershock watch** after a real quake
+- **offline support** (the page and safety steps work without internet)
 
 ---
 
@@ -19,133 +39,143 @@ The alarm reacts on the ESP32 itself, so it works even with no Wi-Fi. The web pa
 
 | Part | Qty |
 |---|---|
-| ESP32 DevKit (30 or 38 pin) | 1 |
+| ESP32 DevKit | 1 |
 | MPU6050 module (GY-521) | 1 |
-| Active buzzer (5 V or 3.3 V) | 2 |
+| Active buzzer | 2 |
 | LED + 220 Ω resistor | 1 |
-| Servo SG90 or MG90S (door) | 1 |
+| Servo SG90 / MG90S (door) | 1 |
 | 1-channel relay module (5 V) | 1 |
-| Lamp for the emergency light (with its own supply) | 1 |
-| Push button (reset, optional) | 1 |
-| 5 V supply for the servo (≥1 A recommended) | 1 |
+| Lamp for the emergency light (own supply) | 1 |
+| Push button (reset) | 1 |
+| 5 V supply for the servo (≥ 1 A) | 1 |
+| *Optional:* MQ-2 gas sensor + 2 resistors (divider) | 1 |
 
 ## Wiring
 
-| Component | Component pin | ESP32 |
+| Component | Pin | ESP32 |
 |---|---|---|
-| MPU6050 | VCC | 3V3 |
-| | GND | GND |
-| | SDA | GPIO 21 |
-| | SCL | GPIO 22 |
-| Buzzer 1 | + | GPIO 25 |
-| | − | GND |
-| Buzzer 2 | + | GPIO 26 |
-| | − | GND |
-| LED | anode (long leg) → 220 Ω | GPIO 27 |
-| | cathode | GND |
-| Servo | signal (orange) | GPIO 13 |
-| | red | **external 5 V** |
-| | brown | GND (shared with ESP32) |
-| Relay module | IN | GPIO 14 |
-| | VCC | 5 V (VIN) |
-| | GND | GND |
-| Reset button | one leg | GPIO 4 |
-| | other leg | GND |
+| MPU6050 | VCC / GND | 3V3 / GND |
+| | SDA / SCL | GPIO 21 / GPIO 22 |
+| Buzzer 1 | + / − | GPIO 25 / GND |
+| Buzzer 2 | + / − | GPIO 26 / GND |
+| LED | anode → 220 Ω / cathode | GPIO 27 / GND |
+| Servo | signal / red / brown | GPIO 13 / **external 5 V** / GND |
+| Relay | IN / VCC / GND | GPIO 14 / 5 V (VIN) / GND |
+| Reset button | two legs | GPIO 4 / GND |
+| MQ-2 *(optional)* | AO through divider (10 kΩ + 20 kΩ) | GPIO 34 |
 
-**Relay contacts (the light):** the lamp's supply goes through **COM** and **NO** (normally open), so the light is off until an alarm.
+- The lamp goes through relay **COM** and **NO**, so it is off until an alarm.
+- **Connect all grounds together.** Never power the servo from the ESP32's 3.3 V pin.
+- Mount the MPU6050 **firmly**, **away from the buzzers and servo**. As a safeguard the buzzers stop after 2 minutes anyway.
+- The servo door must **always open by hand** too. Never let it lock people in.
+- If you fit the MQ-2, set `GAS_SENSOR_INSTALLED = true`. It needs 60 s to warm up.
 
-Important notes:
+## 1. Firebase
 
-- **All grounds must be connected together** (ESP32, servo supply, relay).
-- Do not power the servo from the ESP32's 3.3 V pin; the ESP32 can reset when the servo moves.
-- If your buzzers draw more than about 20 mA, drive them through an NPN transistor (e.g. 2N2222 with a 1 kΩ base resistor).
-- Mount the MPU6050 **firmly** on the base of the model, **away from the buzzers and servo**, so their vibration does not keep the alarm going.
-- If the lamp runs on mains (220 V), ask your teacher to check the wiring. A 12 V LED lamp is safer for a school model.
-
-## 1. Firebase (database)
-
-1. Go to <https://console.firebase.google.com>, click **Add project**, give it a name.
-2. In the left menu open **Build → Realtime Database → Create database**. Choose a location and start in **test mode**.
-3. Copy the database URL shown at the top, for example
-   `https://my-quake-default-rtdb.firebaseio.com`
-4. Open the **Rules** tab and paste these rules (allow only the `earthquake` folder), then **Publish**:
+1. <https://console.firebase.google.com> → **Add project**.
+2. **Build → Realtime Database → Create database** (test mode).
+3. Copy the URL, e.g. `https://my-quake-default-rtdb.firebaseio.com`.
+4. **Rules** tab → paste and **Publish**. Use one block per floor path:
 
 ```json
 {
   "rules": {
-    "earthquake": {
-      ".read": true,
-      ".write": true
-    }
+    "earthquake": { ".read": true, ".write": true }
   }
 }
 ```
 
-These rules let anyone with the URL read the data and press Reset/Test. That is fine for a school project; for a real building, use Firebase Authentication.
+This is fine for a school project. For a real building, use Firebase Authentication so only the manager can write `config` and `command`.
 
-## 2. ESP32 code
+## 2. ESP32
 
-1. Install the **Arduino IDE** and the ESP32 boards (Boards Manager → *esp32 by Espressif*).
-2. Library Manager → install **ESP32Servo** (by Kevin Harrington).
-3. Open `firmware/earthquake_esp32/earthquake_esp32.ino` and fill in the top settings:
+1. Arduino IDE → Boards Manager → **esp32 by Espressif**. Library Manager → **ESP32Servo**.
+2. Open `firmware/earthquake_esp32/earthquake_esp32.ino` and fill in:
 
 ```cpp
-const char* WIFI_SSID     = "your Wi-Fi name";
-const char* WIFI_PASSWORD = "your Wi-Fi password";
+const char* WIFI_SSID     = "your Wi-Fi";
+const char* WIFI_PASSWORD = "your password";
 const char* FIREBASE_URL  = "https://my-quake-default-rtdb.firebaseio.com";
+const char* DB_PATH       = "/earthquake";   // floor 2: "/floor2" ...
+const char* FLOOR_NAME    = "Floor 1";
 ```
 
-4. Board: **ESP32 Dev Module** → Upload.
-5. Keep the model **still for 2 seconds** after power-on while the sensor calibrates (the LED blinks).
+3. Board **ESP32 Dev Module** → Upload. Keep it still for 2 s while it calibrates (the LED blinks).
+
+### Phone alerts (optional, work even when the page is closed)
+
+**Telegram:**
+1. In Telegram, message **@BotFather** → `/newbot` → copy the **token**.
+2. Open your new bot and press **Start**.
+3. Open `https://api.telegram.org/bot<TOKEN>/getUpdates` and copy `"chat":{"id": ...}`.
+4. Put both in `TELEGRAM_BOT_TOKEN` and `TELEGRAM_CHAT_ID`.
+
+**ntfy:** install the ntfy app, subscribe to a long secret topic name (e.g. `herat-quake-x7k29q`), and put it in `NTFY_TOPIC`.
+
+You get one message when shaking starts and one when it ends (with peak and intensity).
 
 ## 3. Web page
 
-1. Open `config.js` in this repository and put the same Firebase URL in `firebaseUrl`.
-2. On GitHub: **Settings → Pages → Build and deployment → Source: Deploy from a branch → Branch: `main`, folder `/ (root)` → Save**.
-3. After about a minute the page is live at `https://mostafaaabedia-tech.github.io/earthquake/`.
+1. Edit `config.js`: put the same `firebaseUrl`, set `managerPin`, and list your floors.
+2. GitHub → **Settings → Pages → Deploy from a branch → `main` / root → Save**.
+3. Open `https://mostafaaabedia-tech.github.io/earthquake/`.
 
 ## How it behaves
 
 | State | Buzzers | LED | Door | Light | Ends when |
 |---|---|---|---|---|---|
-| Monitoring | off | off | closed | off | shaking lasts more than 0.3 s |
-| Alarm (shaking) | siren | on | **open** | **on** | 15 s without shaking |
-| Hold (shaking stopped) | off | on | open | on | Reset button or **Reset system** on the page |
+| Monitoring | off | off | closed | off | an earthquake (or gas) is confirmed |
+| Alarm | siren | on | **open** | **on** | 15 s without shaking (quiet time) |
+| Hold | off | on | open | on | reset button or **Reset alarm** on the page |
 
-- The door and light **stay on after the shaking stops** on purpose, so people can still leave safely. Press reset when the building is safe.
-- New shaking during *Hold* starts a new alarm.
-- **Run test** on the page turns everything on for 5 seconds, then returns to monitoring.
+- After a real earthquake, a **24 h aftershock watch** lowers the threshold to 70% and counts aftershocks.
+- **Test earthquake / fire alarm** turns everything on for 6 s and then returns to normal. Tests do not trigger the full-screen alarm or phone alerts.
+- **Reset** also clears the "I'm safe" list.
 
-## Tuning the sensitivity
+## Detection and tuning
 
-Open **Serial Monitor at 115200**. It prints the vibration (`shake`, in g) and rotation (`gyro`, in °/s) four times a second.
+The ESP32 uses an **STA/LTA trigger**, the method used by real seismographs:
 
-- Watch the values when the table is still and when you shake it.
-- Set `SHAKE_THRESHOLD_G` between the two, e.g. still = 0.01, shaking = 0.15 → use 0.06.
-- Alarm triggers too easily (knocks, footsteps)? Raise `SHAKE_THRESHOLD_G`, `GYRO_THRESHOLD_DPS` or `CONFIRM_MS`.
-- Door opens the wrong way? Swap `DOOR_OPEN_ANGLE` and `DOOR_CLOSED_ANGLE`, or change the angles.
-- Light on when it should be off? Set `RELAY_ACTIVE_LOW` to `false`.
+- **STA** is the 1-second average vibration and **LTA** is the 30-second background level.
+- An earthquake is confirmed when **STA/LTA ≥ trigger ratio** *and* vibration ≥ **minimum shaking**, for at least the **minimum duration**.
+- Very strong shaking (3× the minimum) or fast rotation also triggers it.
+- A door slam is too short to count.
 
-## How detection works
+| Setting | Default | Raise it if… |
+|---|---|---|
+| Minimum shaking | 0.03 g | footsteps or tables cause alarms |
+| Trigger ratio | 3.0 | alarms happen in a noisy room |
+| Detrigger ratio | 1.5 | the alarm lasts too long |
+| Minimum duration | 0.8 s | knocks still trigger it |
+| Quiet time | 15 s | — |
+| Gas alarm level | 2200 | the MQ-2 triggers in clean air |
 
-1. At start-up the ESP32 averages 200 readings to learn which way gravity points and the gyroscope's resting offset.
-2. 100 times a second it measures how far the acceleration moves away from that resting vector (vibration, in g) and how fast the board rotates (°/s).
-3. Both are smoothed over about a quarter second. If either stays above its threshold for 0.3 s, it is treated as an earthquake. A single knock is too short to trigger it.
-4. The page estimates the **Modified Mercalli intensity** from the peak vibration (Wald et al., 1999). On a model this describes the shaking at the sensor, not a real magnitude.
+Change these in **Settings → Detector settings**. The ESP32 reads them every 15 s. Serial Monitor (115200) shows `shake`, `sta`, `ratio`, `gyro`, `tilt` and `gas` live for tuning.
 
-## Files
-
-```
-index.html, style.css, app.js   web page (GitHub Pages)
-config.js                       web page settings (Firebase URL)
-firmware/earthquake_esp32/      ESP32 Arduino code
-```
+**Intensity:** the page converts peak acceleration to the Modified Mercalli scale with the Worden et al. (2012) equation used by USGS ShakeMap. It describes the shaking **at the sensor**, not the earthquake's magnitude. One sensor cannot measure magnitude, so the page takes magnitudes from the USGS catalog instead. The MPU6050 reliably senses shaking from about intensity III–IV upward.
 
 ## Database layout
 
 ```
-earthquake/
-  live       current status, written by the ESP32 every second
-  events/    one record per detected event (start, duration, peak)
-  command    "reset" or "test", written by the page and cleared by the ESP32
+<floor path>/            e.g. earthquake/
+  live      status written by the ESP32 every second
+  events/   one record per alarm (kind, test, start, duration, peak, gas)
+  config    detector settings (written by the page, read by the ESP32)
+  command   "reset" | "test" | "testfire" | "calibrate" | "endwatch"
+  safe/     "I'm safe" taps (cleared on reset)
 ```
+
+## Emergency numbers (Afghanistan)
+
+Police **119** is listed by every official source. Ambulance (**102**) and fire (**112**) numbers differ between sources, so check them locally and edit them in **Settings** or in `config.js`.
+
+## Files
+
+```
+index.html, style.css, app.js, i18n.js   web page
+config.js                                page settings
+sw.js, manifest.webmanifest, icons/      install as an app / offline
+firmware/earthquake_esp32/               ESP32 code
+```
+
+*Educational alarm, not a certified early-warning system.*
