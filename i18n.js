@@ -66,6 +66,8 @@ window.EQ_I18N = {
     tlOffline: "Station went offline", tlOnline: "Station back online",
 
     floorsTitle: "Floors", selectFloor: "Select Floor",
+    stTitle: "Station", stSignal: "Signal", stUptime: "Running for", stUpdated: "Last update",
+    lgRoom: "Your room", lgRoute: "Evacuation route", lgLights: "Corridor lights", lgExit: "Exit", lgSafe: "Meeting point", lgSensor: "Motion sensor",
     tagTitle: "Safer Buildings. Stronger Communities.", tagText: "QuakeGuard helps you detect, respond and stay safe.",
 
     sensorTitle: "Sensor Status", sVib: "Vibration", sGas: "Gas Sensor", sLights: "Corridor Lights",
@@ -227,6 +229,8 @@ window.EQ_I18N = {
     tlOffline: "ایستگاه آفلاین شد", tlOnline: "ایستگاه دوباره آنلاین شد",
 
     floorsTitle: "طبقه‌ها", selectFloor: "انتخاب طبقه",
+    stTitle: "ایستگاه", stSignal: "سیگنال", stUptime: "مدت روشن بودن", stUpdated: "آخرین به‌روزرسانی",
+    lgRoom: "اتاق شما", lgRoute: "مسیر تخلیه", lgLights: "چراغ‌های دهلیز", lgExit: "خروج", lgSafe: "محل تجمع", lgSensor: "سنسور حرکت",
     tagTitle: "ساختمان‌های امن‌تر، جامعه‌های قوی‌تر.", tagText: "QuakeGuard به شما کمک می‌کند تشخیص دهید، واکنش نشان دهید و در امان بمانید.",
 
     sensorTitle: "وضعیت سنسورها", sVib: "لرزش", sGas: "سنسور گاز", sLights: "چراغ‌های دهلیز",

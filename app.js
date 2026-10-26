@@ -468,7 +468,7 @@ function render(d) {
   $("vib").textContent = online ? fix(d.g, 3) + " g" : "—";
   bd("bv", lv === 0 ? "ok" : lv === 1 ? "warn" : "bad", t("lvl" + lv));
   bd("bchart", lv === 0 ? "ok" : lv === 1 ? "warn" : "bad", t("lvl" + lv));
-  if (!d.gasEnabled) { $("gas").textContent = t("notInstalled"); bd("bg", "mute", t("bNotInstalled")); }
+  if (!d.gasEnabled) { $("gas").textContent = "—"; bd("bg", "mute", t("bNotInstalled")); }
   else if (d.gasWarm) { $("gas").textContent = t("warming"); bd("bg", "mute", t("bWarm")); }
   else {
     $("gas").textContent = `${d.gas} / ${d.gasLimit}`;
@@ -533,10 +533,19 @@ function render(d) {
   siren(realAlarm);
   evac(realAlarm || (alarm && d.test), door);
 
+  station(d);
   health(d);
   stats(d);
   smsHref();
   if (DEMO) $("faultbtn").textContent = t("btnFault");
+}
+function station(d) {
+  const online = d.online !== false;
+  $("stdot").className = "st-dot " + (online ? "on" : "off");
+  const r = d.rssi, n = !online || r == null ? 0 : r > -60 ? 4 : r > -67 ? 3 : r > -75 ? 2 : 1;
+  [...$("stbars").children].forEach((b, i) => b.classList.toggle("on", i < n));
+  $("stup").textContent = online && d.uptime != null ? dur(d.uptime) : "—";
+  $("stupd").textContent = lastChange ? ago(lastChange) : (DEMO ? t("justNow") : "—");
 }
 function bd(id, c, txt) { const e = $(id); e.className = "bd " + c + (id === "bchart" ? " push" : ""); e.textContent = txt; const sc = e.closest(".sc"); if (sc) sc.dataset.tone = c; }
 

@@ -1,6 +1,6 @@
 // QuakeGuard service worker: keeps the page and safety steps available offline.
 // Live data (Firebase, USGS) and map tiles are never cached.
-const CACHE = "quakeguard-v3";
+const CACHE = "quakeguard-v4";
 const SHELL = ["./", "index.html", "style.css", "app.js", "i18n.js", "config.js", "manifest.webmanifest", "icons/icon-192.png", "icons/icon-512.png"];
 
 self.addEventListener("install", (e) => {
@@ -14,7 +14,7 @@ self.addEventListener("fetch", (e) => {
   const url = new URL(e.request.url);
   if (e.request.method !== "GET" || url.origin !== location.origin) return;
   e.respondWith(
-    fetch(e.request).then((res) => {
+    fetch(e.request, { cache: "no-cache" }).then((res) => {
       const copy = res.clone();
       caches.open(CACHE).then((c) => c.put(e.request, copy));
       return res;
