@@ -33,8 +33,5 @@ window.EQ_CONFIG = {
   weatherApiKey: "",
 
   // Credits shown on the Air tab
-  credits: {
-    madeBy: ["Mostafa Mesbah Aabedi", "Sebghatullah Haidari"],
-    team: ["Mohammad Yosuf Sultani", "Ahmad Taha Amini"]
-  }
+  credits: { madeBy: ["HBRT Afghan-Turk"] }
 };

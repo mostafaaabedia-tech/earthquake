@@ -749,7 +749,6 @@ function renderCity() {
   let n = 0;
   const chip = (name) => `<span><i style="background:${COL[n++ % COL.length]}">${esc(name.split(/\s+/).filter(Boolean).map((w) => w[0]).slice(0, 2).join("").toUpperCase())}</i>${esc(name)}</span>`;
   $("crew1").innerHTML = cr.madeBy.map(chip).join("");
-  $("crew2").innerHTML = cr.team.map(chip).join("");
 })();
 
 $("silence").onclick = $("silence2").onclick = () => doSilence();
