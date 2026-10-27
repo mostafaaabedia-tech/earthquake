@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css?v=4">
+<link rel="stylesheet" href="style.css?v=5">
 </head>
 <body data-state="ok" data-tab="dash">
 
@@ -49,6 +49,7 @@
     <button data-tab="dash" class="on" data-i18n="tabDash">Dashboard</button>
     <button data-tab="map" data-i18n="tabMap">Live Map</button>
     <button data-tab="region" data-i18n="tabRegion">Region</button>
+    <button data-tab="air" data-i18n="tabAir">Air</button>
     <button data-tab="hist" data-i18n="tabHist">History</button>
     <button data-tab="set" data-i18n="tabSet">Settings</button>
   </nav>
@@ -202,6 +203,25 @@
     <p class="cap" data-i18n="herSrc"></p>
   </div>
 
+
+  <!-- ===== Air (from the Air Monitor project) ===== -->
+  <div class="card airhero" data-t="air" style="order:3">
+    <canvas id="aircv" aria-hidden="true"></canvas>
+    <div class="airtext" aria-live="polite">
+      <p class="where" id="airwhere"></p>
+      <h2 class="airhead" id="airhead"></h2>
+      <p class="airadvice" id="airadvice"></p>
+    </div>
+    <div class="gauges" id="gauges"></div>
+    <button class="silence" id="silence2" disabled></button>
+  </div>
+  <div class="card" data-t="air" style="order:4">
+    <h2 data-i18n="trendTitle">Air over the last 10 minutes</h2>
+    <canvas id="airchart" role="img" aria-label="LPG, smoke and CO2 as a share of their alarm limits"></canvas>
+    <div class="maplegend"><span><i class="lg-l" style="background:#4fb4ff"></i>LPG</span><span><i class="lg-l" style="background:#ffb020"></i><span data-i18n="gSmoke">Smoke</span></span><span><i class="lg-l" style="background:#b48cff"></i>CO₂</span></div>
+    <p class="cap" data-i18n="trendCap"></p>
+  </div>
+
   <!-- STA/LTA -->
   <div class="card" data-t="hist" style="order:6">
     <h2 data-i18n="staTitle">Trigger ratio (STA/LTA)</h2>
@@ -222,7 +242,9 @@
       <label><span data-i18n="detDetrig">Detrigger ratio</span><input name="staDetrig" type="number" step="0.1" min="1" max="10" required></label>
       <label><span data-i18n="detDur">Minimum duration (s)</span><input name="minDur" type="number" step="0.1" min="0.1" max="10" required></label>
       <label><span data-i18n="detQuiet">Quiet time (s)</span><input name="quiet" type="number" step="1" min="3" max="600" required></label>
-      <label><span data-i18n="detGas">Gas alarm level</span><input name="gasLimit" type="number" step="10" min="100" max="4095" required></label>
+      <label><span data-i18n="detLpg">LPG alarm (ppm)</span><input name="lpgLimit" type="number" step="10" min="50" max="1000" required></label>
+      <label><span data-i18n="detSmoke">Smoke alarm (ppm)</span><input name="smokeLimit" type="number" step="10" min="50" max="800" required></label>
+      <label><span data-i18n="detCo2">CO₂ alarm (ppm)</span><input name="co2Limit" type="number" step="10" min="450" max="2000" required></label>
       <div class="btns full"><button class="primary" type="submit" data-i18n="detSave">Save settings</button><button type="button" id="calib" data-i18n="detCalib">Calibrate sensor</button></div>
     </form>
     <p class="cap" data-i18n="detCap"></p>
@@ -242,9 +264,27 @@
 </section>
 
 <section id="right">
-  <div class="card" data-t="dash map hist set" style="order:2">
+  <div class="card" data-t="dash map air hist set" style="order:2">
     <h2 data-i18n="selectFloor">Select Floor</h2>
     <div class="fchips" id="fchips"></div>
+  </div>
+
+
+  <div class="card" data-t="air" style="order:3">
+    <h2 data-i18n="cityTitle">City air</h2>
+    <p class="cap m0" id="cityname"></p>
+    <div class="pm"><b id="pmval">--</b><span>PM2.5 µg/m³</span></div>
+    <div class="pmword" id="pmword"></div>
+    <div class="pmscale" aria-hidden="true"><i id="pmmark"></i></div>
+    <div class="pmlabels"><span data-i18n="pmGood">Good</span><span data-i18n="pmMod">Moderate</span><span data-i18n="pmUnh">Unhealthy</span><span data-i18n="pmHaz">Hazardous</span></div>
+    <div class="weather"><span id="wcond">--</span><b id="wtemp">--</b></div>
+  </div>
+  <div class="card" data-t="air" style="order:4">
+    <h2 data-i18n="madeBy">Made by</h2>
+    <div class="crew" id="crew1"></div>
+    <h2 class="mt" data-i18n="team">Team</h2>
+    <div class="crew" id="crew2"></div>
+    <p class="cap" data-i18n="creditFoot"></p>
   </div>
 
   <div class="card" data-t="region" style="order:5">
@@ -256,7 +296,7 @@
   <div class="card" data-t="dash" style="order:4">
     <h2 data-i18n="sensorTitle">Sensor Status</h2>
     <div class="sc"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></div><div><small data-i18n="sVib">Vibration</small><strong id="vib">-</strong></div><span id="bv" class="bd ok">Steady</span></div>
-    <div class="sc" id="gascard"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/></svg></div><div><small data-i18n="sGas">Gas Sensor</small><strong id="gas">-</strong></div><span id="bg" class="bd ok">Normal</span></div>
+    <div class="sc" id="gascard"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/></svg></div><div><small data-i18n="sAir">Air quality</small><strong id="gas">-</strong></div><span id="bg" class="bd ok">Normal</span></div>
     <div class="sc"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10c1 1 1 2 1 3h6c0-1 0-2 1-3a6 6 0 0 0-4-10z"/></svg></div><div><small data-i18n="sLights">Corridor Lights</small><strong id="neon">-</strong></div><span id="bn" class="bd mute">Normal</span></div>
     <div class="sc"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M6 21V4h12v17M3 21h18M14 12h.01"/></svg></div><div><small data-i18n="sDoor">Emergency Door</small><strong id="doorv">-</strong></div><span id="bd2" class="bd ok">Secure</span></div>
     <div class="sc"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M4 9h3l5-4v14l-5-4H4z"/><path d="M16 9a4 4 0 0 1 0 6M18.5 6.5a8 8 0 0 1 0 11"/></svg></div><div><small data-i18n="sBuzz">Buzzers &amp; LED</small><strong id="buzz">-</strong></div><span id="bb" class="bd mute">Silent</span></div>
@@ -267,6 +307,7 @@
     <h2 data-i18n="ctrlTitle">Controls</h2>
     <div class="btns">
       <button class="primary" id="reset" data-i18n="btnReset">Reset alarm</button>
+      <button id="silence" class="warnbtn" data-i18n="btnSilence">Silence alarm</button>
       <button id="test" data-i18n="btnTestQuake">Test earthquake alarm</button>
       <button id="firebtn" data-i18n="btnTestFire">Test fire alarm</button>
       <button id="faultbtn" data-i18n="btnFault" hidden>Simulate sensor fault</button>
@@ -323,8 +364,8 @@
   </div>
 </section>
 
-<script src="config.js?v=4"></script>
-<script src="i18n.js?v=4"></script>
-<script src="app.js?v=4"></script>
+<script src="config.js?v=5"></script>
+<script src="i18n.js?v=5"></script>
+<script src="app.js?v=5"></script>
 </body>
 </html>

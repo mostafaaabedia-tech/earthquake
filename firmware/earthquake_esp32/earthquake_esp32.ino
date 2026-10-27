@@ -16,7 +16,7 @@
      Very strong shaking or fast rotation (gyroscope) also triggers it.
 
    Behaviour
-     MONITORING -> earthquake (or gas, if an MQ-2 is fitted)  -> ALARM
+     MONITORING -> earthquake, or dangerous air (MQ-2 / MQ-135) -> ALARM
      ALARM      -> calm for the quiet time                     -> HOLD
                    (buzzers off; LED, door and light stay on so people can leave)
      ALARM/HOLD -> reset button or "Reset alarm" on the page   -> MONITORING
@@ -69,9 +69,10 @@ const int PIN_LED        = 27;   // warning LED (through 220 ohm resistor)
 const int PIN_SERVO      = 13;   // door servo signal
 const int PIN_RELAY      = 14;   // relay IN (emergency / corridor light)
 const int PIN_RESET_BTN  = 4;    // push button to GND
-const int PIN_GAS        = 34;   // MQ-2 AO (optional, through a divider: 5V -> 3.3V)
+const int PIN_MQ2        = 34;   // MQ-2  AO  (LPG + smoke)   through a divider 5V -> 3.3V
+const int PIN_MQ135      = 35;   // MQ-135 AO (CO2 / bad air) through a divider 5V -> 3.3V
 
-const bool GAS_SENSOR_INSTALLED = false;  // true if you add an MQ-2 gas sensor
+const bool AIR_SENSORS_INSTALLED = true;  // MQ-2 + MQ-135 fitted (false = earthquake only)
 const bool RELAY_ACTIVE_LOW     = true;   // most blue relay modules switch ON with LOW
 
 const int DOOR_CLOSED_ANGLE = 0;
@@ -85,9 +86,11 @@ struct Settings {
   float    gyroDps;    // rotation that also counts as shaking (deg/s)
   uint32_t minDurMs;   // shaking must last this long (ms)
   uint32_t quietMs;    // calm time before buzzers stop (ms)
-  int      gasLimit;   // MQ-2 raw level (0-4095) for a gas alarm
+  float    lpgLimit;   // LPG estimate (ppm) for a gas alarm
+  float    smokeLimit; // smoke estimate (ppm)
+  float    co2Limit;   // CO2 estimate (ppm)
 };
-Settings cfg = { 0.03f, 3.0f, 1.5f, 25.0f, 800, 15000, 2200 };
+Settings cfg = { 0.03f, 3.0f, 1.5f, 25.0f, 800, 15000, 600.0f, 300.0f, 1500.0f };
 
 const unsigned long TEST_MS          = 6000;          // test alarm length
 const unsigned long RESET_IGNORE_MS  = 2000;          // ignore shaking after reset
@@ -95,7 +98,7 @@ const unsigned long DOOR_IGNORE_MS   = 1500;          // ignore shaking while se
 const unsigned long MAX_QUAKE_MS     = 120000;        // buzzers stop after 2 min anyway
 const unsigned long AFTERSHOCK_MS    = 24UL * 3600000UL; // 24 h aftershock watch
 const float         AFTERSHOCK_FACTOR = 0.7f;         // threshold x0.7 during the watch
-const unsigned long GAS_WARMUP_MS    = 60000;         // MQ-2 heater warm-up
+const unsigned long GAS_WARMUP_MS    = 60000;         // MQ sensor heater warm-up
 const unsigned long GAS_CONFIRM_MS   = 2000;
 const unsigned long CONFIG_PERIOD_MS = 15000;         // read settings from Firebase
 
@@ -125,8 +128,9 @@ struct LiveData {
   State state;
   bool  quake, fire, test, latched;
   float shake, gyro, sta, ratio, peak, peakAll, tilt;
-  int   gas;
-  bool  gasWarm, buzzer, led, light, doorOpen, sensorOk;
+  float lpg, smoke, co2, airRatio;
+  int   mq2Raw, mq135Raw;
+  bool  gasWarm, silenced, buzzer, led, light, doorOpen, sensorOk;
   uint32_t quakes, fires, aftershocks;
   long  watchLeftS;
 };
@@ -137,7 +141,7 @@ float    traceRing[TRACE_LEN];
 uint32_t traceSeq = 0;
 
 // Event messages: sensor loop -> network task
-struct EvMsg { uint8_t type; uint8_t kind; bool test; float peak; float dur; int gas; };
+struct EvMsg { uint8_t type; uint8_t kind; bool test; float peak; float dur; float lpg, smoke, co2; };
 enum { EV_START = 0, EV_END = 1 };
 const int EVQ_LEN = 16;
 EvMsg    evq[EVQ_LEN];
@@ -147,7 +151,7 @@ volatile uint32_t resetCount = 0;
 
 // Commands from the web page
 volatile bool cmdReset = false, cmdTest = false, cmdTestFire = false;
-volatile bool cmdCalibrate = false, cmdEndWatch = false;
+volatile bool cmdCalibrate = false, cmdEndWatch = false, cmdSilence = false;
 
 // --------------------------- Sensor state -----------------------------------
 Servo doorServo;
@@ -166,7 +170,10 @@ unsigned long fireCondMs = 0, fireStartMs = 0, lastFireMs = 0;
 unsigned long testStartMs = 0, testEndMs = 0;
 unsigned long ignoreUntilMs = 0, watchUntilMs = 0;
 float quakePeak = 0, peakAll = 0;
-int   gasLevel = 0, firePeakGas = 0;
+float lpg = 0, smoke = 0, co2 = 400, airRatio = 0;      // air quality estimates (ppm)
+int   mq2Raw = 0, mq135Raw = 0;
+float peakLpg = 0, peakSmoke = 0, peakCo2 = 0;          // worst air during a gas alarm
+bool  silenced = false;                                 // buzzers silenced from the page
 uint32_t quakeCount = 0, fireCount = 0, aftershockCount = 0;
 float windowMax = 0;
 unsigned long windowStartMs = 0;
@@ -284,9 +291,9 @@ State currentState() {
 // ============================================================================
 //                              Events
 // ============================================================================
-void pushEvent(uint8_t type, uint8_t kind, bool test, float peak, float dur, int gas) {
+void pushEvent(uint8_t type, uint8_t kind, bool test, float peak, float dur, float l = 0, float sm = 0, float c2 = 0) {
   portENTER_CRITICAL(&dataMux);
-  evq[evHead % EVQ_LEN] = { type, kind, test, peak, dur, gas };
+  evq[evHead % EVQ_LEN] = { type, kind, test, peak, dur, l, sm, c2 };
   evHead = evHead + 1;
   portEXIT_CRITICAL(&dataMux);
 }
@@ -294,7 +301,7 @@ void pushEvent(uint8_t type, uint8_t kind, bool test, float peak, float dur, int
 void endTest(unsigned long now) {
   if (!testActive) return;
   testActive = false;
-  pushEvent(EV_END, testKind, true, 0, (now - testStartMs) / 1000.0f, 0);
+  pushEvent(EV_END, testKind, true, 0, (now - testStartMs) / 1000.0f);
 }
 
 void startQuake(unsigned long now) {
@@ -305,14 +312,15 @@ void startQuake(unsigned long now) {
   quakePeak = shakeFast;
   quakeCount++;
   if ((long)(watchUntilMs - now) > 0) aftershockCount++;
-  pushEvent(EV_START, K_QUAKE, false, quakePeak, 0, 0);
+  silenced = false;
+  pushEvent(EV_START, K_QUAKE, false, quakePeak, 0);
   Serial.println(">>> EARTHQUAKE DETECTED — ALARM ON");
 }
 
 void endQuake(unsigned long now) {
   if (!quakeActive) return;
   quakeActive = false;
-  pushEvent(EV_END, K_QUAKE, false, quakePeak, (lastShakeMs - quakeStartMs) / 1000.0f, 0);
+  pushEvent(EV_END, K_QUAKE, false, quakePeak, (lastShakeMs - quakeStartMs) / 1000.0f);
   watchUntilMs = now + AFTERSHOCK_MS;
   Serial.println(">>> Shaking stopped — aftershock watch started (24 h)");
 }
@@ -322,16 +330,17 @@ void startFire(unsigned long now) {
   fireActive = true;
   latched = true;
   fireStartMs = lastFireMs = now;
-  firePeakGas = gasLevel;
+  peakLpg = lpg; peakSmoke = smoke; peakCo2 = co2;
+  silenced = false;
   fireCount++;
-  pushEvent(EV_START, K_FIRE, false, 0, 0, gasLevel);
+  pushEvent(EV_START, K_FIRE, false, 0, 0, lpg, smoke, co2);
   Serial.println(">>> GAS / FIRE DETECTED — ALARM ON");
 }
 
 void endFire(unsigned long now) {
   if (!fireActive) return;
   fireActive = false;
-  pushEvent(EV_END, K_FIRE, false, 0, (lastFireMs - fireStartMs) / 1000.0f, firePeakGas);
+  pushEvent(EV_END, K_FIRE, false, 0, (lastFireMs - fireStartMs) / 1000.0f, peakLpg, peakSmoke, peakCo2);
 }
 
 void startTest(unsigned long now, uint8_t kind) {
@@ -340,7 +349,8 @@ void startTest(unsigned long now, uint8_t kind) {
   testKind = kind;
   testStartMs = now;
   testEndMs = now + TEST_MS;
-  pushEvent(EV_START, kind, true, 0, 0, 0);
+  silenced = false;
+  pushEvent(EV_START, kind, true, 0, 0);
   Serial.println(kind == K_FIRE ? ">>> FIRE TEST" : ">>> EARTHQUAKE TEST");
 }
 
@@ -435,7 +445,8 @@ String settingsJson(const Settings& c) {
          ",\"gyroDps\":" + String(c.gyroDps, 1) +
          ",\"minDur\":" + String(c.minDurMs / 1000.0f, 2) +
          ",\"quiet\":" + String(c.quietMs / 1000.0f, 1) +
-         ",\"gasLimit\":" + String(c.gasLimit) + "}";
+         ",\"lpgLimit\":" + String(c.lpgLimit, 0) + ",\"smokeLimit\":" + String(c.smokeLimit, 0) +
+         ",\"co2Limit\":" + String(c.co2Limit, 0) + "}";
 }
 
 void readConfig() {
@@ -454,7 +465,9 @@ void readConfig() {
   if (jsonNumber(resp, "gyroDps", v)   && v >= 5      && v <= 250)   c.gyroDps = v;
   if (jsonNumber(resp, "minDur", v)    && v >= 0.1f   && v <= 10)    c.minDurMs = (uint32_t)(v * 1000);
   if (jsonNumber(resp, "quiet", v)     && v >= 3      && v <= 600)   c.quietMs = (uint32_t)(v * 1000);
-  if (jsonNumber(resp, "gasLimit", v)  && v >= 100    && v <= 4095)  c.gasLimit = (int)v;
+  if (jsonNumber(resp, "lpgLimit", v)   && v >= 50  && v <= 1000) c.lpgLimit = v;
+  if (jsonNumber(resp, "smokeLimit", v) && v >= 50  && v <= 800)  c.smokeLimit = v;
+  if (jsonNumber(resp, "co2Limit", v)   && v >= 450 && v <= 2000) c.co2Limit = v;
   if (c.staDetrig >= c.staTrig) c.staDetrig = c.staTrig * 0.6f;
   portENTER_CRITICAL(&dataMux); cfg = c; portEXIT_CRITICAL(&dataMux);
 }
@@ -496,22 +509,25 @@ void networkTask(void*) {
       if (m.type == EV_START) {
         String body = String("{\"kind\":\"") + kindName(m.kind) + "\",\"test\":" + (m.test ? "true" : "false") +
                       ",\"floor\":\"" + FLOOR_NAME + "\",\"status\":\"active\",\"peak\":" + String(m.peak, 4) +
-                      ",\"gas\":" + String(m.gas) + ",\"start\":{\".sv\":\"timestamp\"}}";
+                      ",\"lpg\":" + String(m.lpg, 0) + ",\"smoke\":" + String(m.smoke, 0) + ",\"co2\":" + String(m.co2, 0) +
+                      ",\"start\":{\".sv\":\"timestamp\"}}";
         String resp;
         int code = fbRequest("POST", "/events", body, &resp);
         eventKey[m.kind] = "";
         int p = resp.indexOf("\"name\":\"");
         if (code == 200 && p >= 0) eventKey[m.kind] = resp.substring(p + 8, resp.indexOf('"', p + 8));
         if (!m.test) {
-          if (m.kind == K_FIRE) sendAlert(String("QuakeGuard: GAS / FIRE on ") + FLOOR_NAME,
-                                          "Gas level " + String(m.gas) + ". Exit door open, emergency lights on. Leave by the stairs.");
+          if (m.kind == K_FIRE) sendAlert(String("QuakeGuard: DANGEROUS AIR on ") + FLOOR_NAME,
+                                          "LPG " + String(m.lpg, 0) + " ppm, smoke " + String(m.smoke, 0) + " ppm, CO2 " + String(m.co2, 0) +
+                                          " ppm. Exit door open, emergency lights on. Leave through the exit.");
           else sendAlert(String("QuakeGuard: EARTHQUAKE on ") + FLOOR_NAME,
                          "Shaking detected. Drop, cover and hold on. Exit door open, emergency lights on.");
         }
       } else {
         if (eventKey[m.kind].length() > 0) {
           String body = String("{\"status\":\"ended\",\"peak\":") + String(m.peak, 4) +
-                        ",\"duration\":" + String(m.dur, 1) + ",\"gas\":" + String(m.gas) +
+                        ",\"duration\":" + String(m.dur, 1) + ",\"lpg\":" + String(m.lpg, 0) +
+                        ",\"smoke\":" + String(m.smoke, 0) + ",\"co2\":" + String(m.co2, 0) +
                         ",\"end\":{\".sv\":\"timestamp\"}}";
           fbRequest("PATCH", "/events/" + eventKey[m.kind], body, nullptr);
         }
@@ -564,8 +580,11 @@ void networkTask(void*) {
         "\"tilt\":" + String(s.tilt, 2) + "," +
         "\"threshold\":" + String(c.minG, 3) + ",\"staTrig\":" + String(c.staTrig, 2) +
         ",\"staDetrig\":" + String(c.staDetrig, 2) + ",\"minDur\":" + String(c.minDurMs / 1000.0f, 2) + "," +
-        "\"gasEnabled\":" + b(GAS_SENSOR_INSTALLED) + ",\"gas\":" + String(s.gas) + ",\"gasLimit\":" + String(c.gasLimit) +
-        ",\"gasWarm\":" + b(s.gasWarm) + "," +
+        "\"airEnabled\":" + b(AIR_SENSORS_INSTALLED) + ",\"lpg\":" + String(s.lpg, 1) + ",\"smoke\":" + String(s.smoke, 1) +
+        ",\"co2\":" + String(s.co2, 1) + ",\"airRatio\":" + String(s.airRatio, 3) +
+        ",\"mq2\":" + String(s.mq2Raw) + ",\"mq135\":" + String(s.mq135Raw) +
+        ",\"lpgLimit\":" + String(c.lpgLimit, 0) + ",\"smokeLimit\":" + String(c.smokeLimit, 0) + ",\"co2Limit\":" + String(c.co2Limit, 0) +
+        ",\"gasWarm\":" + b(s.gasWarm) + ",\"silenced\":" + b(s.silenced) + "," +
         "\"buzzer\":" + b(s.buzzer) + ",\"led\":" + b(s.led) + ",\"light\":" + b(s.light) + "," +
         "\"door\":\"" + (s.doorOpen ? "open" : "closed") + "\"," +
         "\"sensorOk\":" + b(s.sensorOk) + "," +
@@ -587,6 +606,7 @@ void networkTask(void*) {
         else if (resp.indexOf("reset") >= 0) cmdReset = true;
         else if (resp.indexOf("calibrate") >= 0) cmdCalibrate = true;
         else if (resp.indexOf("endwatch") >= 0) cmdEndWatch = true;
+        else if (resp.indexOf("silence") >= 0) cmdSilence = true;
         fbRequest("PUT", "/command", "\"none\"", nullptr);
       }
     }
@@ -612,7 +632,8 @@ void setup() {
   pinMode(PIN_RESET_BTN, INPUT_PULLUP);
   setBuzzers(false);
   digitalWrite(PIN_LED, LOW);
-  if (GAS_SENSOR_INSTALLED) analogSetPinAttenuation(PIN_GAS, ADC_11db);
+  analogReadResolution(12);
+  if (AIR_SENSORS_INSTALLED) { analogSetPinAttenuation(PIN_MQ2, ADC_11db); analogSetPinAttenuation(PIN_MQ135, ADC_11db); }
 
   ESP32PWM::allocateTimer(0);
   doorServo.setPeriodHertz(50);
@@ -628,7 +649,7 @@ void setup() {
 
   live.state = ST_MONITOR;
   live.sensorOk = sensorOk;
-  live.gasWarm = GAS_SENSOR_INSTALLED;
+  live.gasWarm = AIR_SENSORS_INSTALLED;
   windowStartMs = millis();
 
   if (cloudConfigured()) {
@@ -704,17 +725,22 @@ void loop() {
     if (now - lastShakeMs >= c.quietMs || now - quakeStartMs >= MAX_QUAKE_MS) endQuake(now);
   }
 
-  // ---------- Gas / fire (optional MQ-2)
+  // ---------- Air quality (MQ-2 + MQ-135), same estimates as the Air Monitor project
   bool gasWarm = false;
-  if (GAS_SENSOR_INSTALLED) {
+  if (AIR_SENSORS_INSTALLED) {
     if (now - lastGasRead >= 100) {
       lastGasRead = now;
-      int sum = 0;
-      for (int i = 0; i < 4; i++) sum += analogRead(PIN_GAS);
-      gasLevel = sum / 4;
+      long s2 = 0, s135 = 0;
+      for (int i = 0; i < 10; i++) { s2 += analogRead(PIN_MQ2); s135 += analogRead(PIN_MQ135); }
+      mq2Raw = s2 / 10; mq135Raw = s135 / 10;
+      // simple estimates from the raw readings (not calibrated ppm)
+      lpg   = (mq2Raw / 4095.0f) * 1000.0f;
+      smoke = (mq2Raw / 4095.0f) * 800.0f;
+      co2   = 400.0f + (mq135Raw / 4095.0f) * 1600.0f;
+      airRatio = fmaxf(lpg / c.lpgLimit, fmaxf(smoke / c.smokeLimit, co2 / c.co2Limit));
     }
     gasWarm = now < GAS_WARMUP_MS;
-    bool gasHigh = !gasWarm && gasLevel > c.gasLimit;
+    bool gasHigh = !gasWarm && airRatio >= 1.0f;
     if (gasHigh && (long)(ignoreUntilMs - now) <= 0) {
       if (fireCondMs == 0) fireCondMs = now;
       if (!fireActive && now - fireCondMs >= GAS_CONFIRM_MS) startFire(now);
@@ -722,8 +748,8 @@ void loop() {
       fireCondMs = 0;
     }
     if (fireActive) {
-      if (gasLevel > c.gasLimit * 0.9f) lastFireMs = now;
-      if (gasLevel > firePeakGas) firePeakGas = gasLevel;
+      if (airRatio > 0.9f) lastFireMs = now;
+      peakLpg = fmaxf(peakLpg, lpg); peakSmoke = fmaxf(peakSmoke, smoke); peakCo2 = fmaxf(peakCo2, co2);
       if (now - lastFireMs >= c.quietMs) endFire(now);
     }
   }
@@ -744,6 +770,7 @@ void loop() {
   if (cmdTest)     { cmdTest = false;     startTest(now, K_QUAKE); }
   if (cmdTestFire) { cmdTestFire = false; startTest(now, K_FIRE); }
   if (cmdEndWatch) { cmdEndWatch = false; watchUntilMs = now; aftershockCount = 0; }
+  if (cmdSilence)  { cmdSilence = false;  if (currentState() == ST_ALARM) silenced = true; }
   if (cmdCalibrate) {
     cmdCalibrate = false;
     if (currentState() == ST_MONITOR && sensorOk) { calibrate(); now = millis(); ignoreUntilMs = now + RESET_IGNORE_MS; }
@@ -753,7 +780,8 @@ void loop() {
   State st = currentState();
   bool alarm = (st == ST_ALARM), hold = (st == ST_HOLD);
   bool fireSiren = fireActive || (testActive && testKind == K_FIRE);
-  bool buzzerOn = alarm && (fireSiren ? ((now / 150) % 2 == 0) : ((now / 250) % 3 != 2));
+  if (!alarm) silenced = false;
+  bool buzzerOn = alarm && !silenced && (fireSiren ? ((now / 150) % 2 == 0) : ((now / 250) % 3 != 2));
   setBuzzers(buzzerOn);
   digitalWrite(PIN_LED, (alarm || hold) ? HIGH : LOW);
   setRelay(alarm || hold);
@@ -774,8 +802,10 @@ void loop() {
   live.sta = sta;          live.ratio = ratio;
   live.peak = quakePeak;   live.peakAll = peakAll;
   live.tilt = tilt;
-  live.gas = gasLevel;     live.gasWarm = gasWarm;
-  live.buzzer = alarm;     live.led = alarm || hold;  live.light = alarm || hold;
+  live.lpg = lpg; live.smoke = smoke; live.co2 = co2; live.airRatio = airRatio;
+  live.mq2Raw = mq2Raw; live.mq135Raw = mq135Raw;
+  live.gasWarm = gasWarm;  live.silenced = silenced;
+  live.buzzer = alarm && !silenced;     live.led = alarm || hold;  live.light = alarm || hold;
   live.doorOpen = doorIsOpen;
   live.sensorOk = sensorOk;
   live.quakes = quakeCount; live.fires = fireCount; live.aftershocks = aftershockCount;
@@ -787,7 +817,7 @@ void loop() {
   // ---------- Serial output for tuning
   if (DEBUG_SERIAL && now - lastDebug >= 250) {
     lastDebug = now;
-    Serial.printf("shake=%.4f g  sta=%.4f  ratio=%5.2f  gyro=%6.2f dps  tilt=%.2f  gas=%d  state=%s\n",
-                  shakeAvg, sta, ratio, gyroAvg, tilt, gasLevel, STATE_NAMES[st]);
+    Serial.printf("shake=%.4f g  sta=%.4f  ratio=%5.2f  gyro=%6.2f  tilt=%.2f  LPG=%.0f smoke=%.0f CO2=%.0f  state=%s\n",
+                  shakeAvg, sta, ratio, gyroAvg, tilt, lpg, smoke, co2, STATE_NAMES[st]);
   }
 }

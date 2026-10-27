@@ -6,6 +6,8 @@ An ESP32 with an MPU6050 gyroscope/accelerometer watches for earthquakes. When i
 - turns on the **warning LED**
 - rotates the **servo to open the exit door**
 - switches the **relay to turn on the emergency / corridor light**
+
+The same alarm also goes off for **dangerous air**: an **MQ-2** (LPG, smoke) and an **MQ-135** (CO₂) watch the air, just like the Air Monitor project.
 - sends the event to **Firebase**, where the **QuakeGuard web page** shows it live
 - optionally sends a **Telegram** or **ntfy** message to your phone
 
@@ -27,6 +29,7 @@ Already set in `config.js` and in the ESP32 code. Only the `earthquake/` path is
 | **Dashboard** | Big status banner, animated **floor plan** (green corridor lights, opening stair door, evacuation route), **shaking intensity** (Mercalli I–X), vibration chart, sensor status cards, **I'm safe** counter, what-to-do steps, controls |
 | **Live Map** | Floor plan only. Tap your room to see your route, distance and walking time to the stairs |
 | **Region** | Map of **real recent earthquakes** near Herat (USGS, with EMSC as backup) on OpenStreetMap, with magnitude, depth, distance and links. Background on the 2023 Herat earthquakes |
+| **Air** | From the Air Monitor project: headline (clean / getting worse / dangerous), **LPG, smoke and CO₂ dial gauges**, **Silence the alarm**, floating-particle background, 10-minute gas trend chart, **city PM2.5 and weather** (WeatherAPI, add your key in `config.js`), team credits |
 | **History** | Vibration chart, **STA/LTA trigger chart**, alarm timeline, event log with **"Was it a real earthquake?"** (checks the USGS catalog), **CSV/JSON download** |
 | **Settings** | **Detector settings** that the ESP32 reads from Firebase (no re-flashing), sensor calibration, sensor health, emergency contacts with tap-to-call and SMS, notifications, voice, theme, large text, **دری / English**, QR code, **printable evacuation plan**, install as an app |
 
@@ -52,7 +55,9 @@ Also:
 | Lamp for the emergency light (own supply) | 1 |
 | Push button (reset) | 1 |
 | 5 V supply for the servo (≥ 1 A) | 1 |
-| *Optional:* MQ-2 gas sensor + 2 resistors (divider) | 1 |
+| MQ-2 gas sensor (LPG, smoke) | 1 |
+| MQ-135 air sensor (CO₂) | 1 |
+| Resistors for two dividers (10 kΩ + 20 kΩ each) | 4 |
 
 ## Wiring
 
@@ -66,13 +71,16 @@ Also:
 | Servo | signal / red / brown | GPIO 13 / **external 5 V** / GND |
 | Relay | IN / VCC / GND | GPIO 14 / 5 V (VIN) / GND |
 | Reset button | two legs | GPIO 4 / GND |
-| MQ-2 *(optional)* | AO through divider (10 kΩ + 20 kΩ) | GPIO 34 |
+| MQ-2 | VCC / GND / AO through divider (10 kΩ + 20 kΩ) | 5 V (VIN) / GND / GPIO 34 |
+| MQ-135 | VCC / GND / AO through divider (10 kΩ + 20 kΩ) | 5 V (VIN) / GND / GPIO 35 |
 
 - The lamp goes through relay **COM** and **NO**, so it is off until an alarm.
 - **Connect all grounds together.** Never power the servo from the ESP32's 3.3 V pin.
 - Mount the MPU6050 **firmly**, **away from the buzzers and servo**. As a safeguard the buzzers stop after 2 minutes anyway.
 - The servo door must **always open by hand** too. Never let it lock people in.
-- If you fit the MQ-2, set `GAS_SENSOR_INSTALLED = true`. It needs 60 s to warm up.
+- The MQ sensors run on **5 V** and their AO can reach 5 V, so each AO goes through a divider (AO → 10 kΩ → GPIO, GPIO → 20 kΩ → GND) to keep the ESP32 pin under 3.3 V.
+- They need about **60 s to warm up** after power-on; no gas alarms during that time.
+- No MQ sensors? Set `AIR_SENSORS_INSTALLED = false` and it runs as an earthquake-only alarm.
 
 ## 1. Firebase (already done for `quakeguard-earthquake`)
 
@@ -126,6 +134,20 @@ You get one message when shaking starts and one when it ends (with peak and inte
 2. GitHub → **Settings → Pages → Deploy from a branch → `main` / root → Save**.
 3. Open `https://mostafaaabedia-tech.github.io/earthquake/`.
 
+## Air alarm (MQ-2 + MQ-135)
+
+The ESP32 turns the sensor readings into estimates, using the same formulas as the Air Monitor project:
+
+| Reading | From | Formula (raw 0–4095) | Alarm |
+|---|---|---|---|
+| LPG | MQ-2 | raw / 4095 × 1000 | 600 ppm |
+| Smoke | MQ-2 | raw / 4095 × 800 | 300 ppm |
+| CO₂ | MQ-135 | 400 + raw / 4095 × 1600 | 1500 ppm |
+
+These are rough estimates, not calibrated ppm. When any of them stays above its limit for 2 s, the ESP32 starts a **dangerous-air alarm**: buzzers (fast beeps), LED, door open, emergency light, event log and Telegram/ntfy. **Silence the alarm** on the page stops only the buzzers; the door and light stay on until reset. Change the three limits in **Settings → Detector settings**.
+
+**City air:** paste your WeatherAPI.com key into `weatherApiKey` in `config.js` to show Herat's PM2.5 and weather on the Air tab.
+
 ## How it behaves
 
 | State | Buzzers | LED | Door | Light | Ends when |
@@ -154,7 +176,7 @@ The ESP32 uses an **STA/LTA trigger**, the method used by real seismographs:
 | Detrigger ratio | 1.5 | the alarm lasts too long |
 | Minimum duration | 0.8 s | knocks still trigger it |
 | Quiet time | 15 s | — |
-| Gas alarm level | 2200 | the MQ-2 triggers in clean air |
+| LPG / smoke / CO₂ alarm | 600 / 300 / 1500 ppm | the MQ sensors trigger in clean air |
 
 Change these in **Settings → Detector settings**. The ESP32 reads them every 15 s. Serial Monitor (115200) shows `shake`, `sta`, `ratio`, `gyro`, `tilt` and `gas` live for tuning.
 
@@ -167,7 +189,7 @@ Change these in **Settings → Detector settings**. The ESP32 reads them every 1
   live      status written by the ESP32 every second
   events/   one record per alarm (kind, test, start, duration, peak, gas)
   config    detector settings (written by the page, read by the ESP32)
-  command   "reset" | "test" | "testfire" | "calibrate" | "endwatch"
+  command   "reset" | "test" | "testfire" | "calibrate" | "endwatch" | "silence"
   safe/     "I'm safe" taps (cleared on reset)
 ```
 

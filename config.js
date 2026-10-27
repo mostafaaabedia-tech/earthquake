@@ -26,5 +26,15 @@ window.EQ_CONFIG = {
   region: { radiusKm: 1000, minMag: 4, days: 30 },
 
   // Default emergency numbers (each phone can change them in Settings)
-  contacts: { police: "119", amb: "102", fire: "112", mgr: "" }
+  contacts: { police: "119", amb: "102", fire: "112", mgr: "" },
+
+  // City air (PM2.5) and weather for the Air tab: paste your free key from
+  // https://www.weatherapi.com here (the same one the Air Monitor page uses).
+  weatherApiKey: "",
+
+  // Credits shown on the Air tab
+  credits: {
+    madeBy: ["Mostafa Mesbah Aabedi", "Sebghatullah Haidari"],
+    team: ["Mohammad Yosuf Sultani", "Ahmad Taha Amini"]
+  }
 };
