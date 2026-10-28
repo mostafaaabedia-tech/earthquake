@@ -55,6 +55,7 @@ Also:
 | Lamp for the emergency light (own supply) | 1 |
 | Push button (reset) | 1 |
 | 5 V supply for the servo (≥ 1 A) | 1 |
+| OLED 0.96" SSD1306 128×64 I2C (or 1.3" SH1106 / 1.5" SH1107) | 1 |
 | MQ-2 gas sensor (LPG, smoke) | 1 |
 | MQ-135 air sensor (CO₂) | 1 |
 | Resistors for two dividers (10 kΩ + 20 kΩ each) | 4 |
@@ -65,6 +66,8 @@ Also:
 |---|---|---|
 | MPU6050 | VCC / GND | 3V3 / GND |
 | | SDA / SCL | GPIO 21 / GPIO 22 |
+| OLED | VCC / GND | 3V3 / GND |
+| | SDA / SCL | GPIO 21 / GPIO 22 (shared with the MPU6050) |
 | Buzzer 1 | + / − | GPIO 25 / GND |
 | Buzzer 2 | + / − | GPIO 26 / GND |
 | LED | anode → 220 Ω / cathode | GPIO 27 / GND |
@@ -103,7 +106,7 @@ This is fine for a school project. For a real building, use Firebase Authenticat
 
 ## 2. ESP32
 
-1. Arduino IDE → Boards Manager → **esp32 by Espressif**. Library Manager → **ESP32Servo**.
+1. Arduino IDE → Boards Manager → **esp32 by Espressif**. Library Manager → **ESP32Servo** and **U8g2**.
 2. Open `firmware/earthquake_esp32/earthquake_esp32.ino` and fill in your Wi-Fi (the Firebase URL is already set):
 
 ```cpp
@@ -147,6 +150,22 @@ The ESP32 turns the sensor readings into estimates, using the same formulas as t
 These are rough estimates, not calibrated ppm. When any of them stays above its limit for 2 s, the ESP32 starts a **dangerous-air alarm**: buzzers (fast beeps), LED, door open, emergency light, event log and Telegram/ntfy. **Silence the alarm** on the page stops only the buzzers; the door and light stay on until reset. Change the three limits in **Settings → Detector settings**.
 
 **City air:** paste your WeatherAPI.com key into `weatherApiKey` in `config.js` to show Herat's PM2.5 and weather on the Air tab.
+
+## OLED screen
+
+Set your model at the top of the ESP32 code: `#define OLED_MODEL 1` (0.96" SSD1306), `2` (1.3" SH1106) or `3` (1.5" SH1107). If no OLED is found, the ESP32 runs without it.
+
+| Screen | Shows |
+|---|---|
+| Boot | QuakeGuard logo, *HBRT Afghan-Turk* |
+| Calibrating | progress bar, "keep the station still" |
+| **SEISMO** page | live scrolling seismograph with the alarm level dotted, Mercalli intensity box, g value, aftershock watch |
+| **AIR** page | LPG, smoke and CO₂ bars with the alarm limit marked, values in ppm, warm-up countdown |
+| **SYSTEM** page | tilt, uptime, number of quakes and air alarms, IP address, floor |
+| Alarm | flashing screen: EARTHQUAKE! or BAD AIR!, intensity or worst gas, "Buzzer silenced", moving **EXIT ▶▶▶** arrows |
+| After the alarm | "SHAKING STOPPED / AIR CLEARED – press RESET when the area is safe" |
+
+The top bar shows the page dots, Wi-Fi signal bars, and a cloud icon (filled when Firebase is updating, crossed out when offline). Pages change every 5 seconds.
 
 ## How it behaves
 

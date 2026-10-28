@@ -28,7 +28,7 @@
    The alarm runs on core 1 and never waits for the internet.
    Wi-Fi, Firebase and alerts run on core 0.
 
-   Libraries: ESP32Servo (Kevin Harrington).   Board: "ESP32 Dev Module".
+   Libraries: ESP32Servo (Kevin Harrington), U8g2 (oliver) for the OLED.   Board: "ESP32 Dev Module".
   ============================================================================
 */
 
@@ -38,6 +38,7 @@
 #include <Wire.h>
 #include <ESP32Servo.h>
 #include <math.h>
+#include <U8g2lib.h>
 
 // ============================ USER SETTINGS =================================
 const char* WIFI_SSID     = "YOUR_WIFI_NAME";
@@ -102,6 +103,13 @@ const unsigned long GAS_WARMUP_MS    = 60000;         // MQ sensor heater warm-u
 const unsigned long GAS_CONFIRM_MS   = 2000;
 const unsigned long CONFIG_PERIOD_MS = 15000;         // read settings from Firebase
 
+// ------------------------------ OLED ---------------------------------------
+// I2C OLED on the same pins as the MPU6050 (SDA 21, SCL 22). Pick your model:
+//   1 = 0.96" SSD1306 128x64   2 = 1.3" SH1106 128x64   3 = 1.5" SH1107 128x128
+#define OLED_MODEL 1
+const bool OLED_ENABLED = true;      // false if no OLED is connected
+const unsigned long OLED_PAGE_MS = 5000;   // time per page while monitoring
+
 const bool DEBUG_SERIAL = true;
 const char* FW_VERSION  = "2.0";
 // ============================================================================
@@ -155,6 +163,17 @@ volatile bool cmdCalibrate = false, cmdEndWatch = false, cmdSilence = false;
 
 // --------------------------- Sensor state -----------------------------------
 Servo doorServo;
+#if OLED_MODEL == 2
+U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
+#elif OLED_MODEL == 3
+U8G2_SH1107_128X128_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
+#else
+U8G2_SSD1306_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
+#endif
+bool oledOk = false;
+volatile bool cloudOk = false;       // last Firebase upload worked
+void oledCalib(int pct);             // drawn while calibrating
+void pushWave(float v);
 float baseX = 0, baseY = 0, baseZ = 1;          // current gravity vector
 float calX = 0, calY = 0, calZ = 1;             // gravity at calibration (tilt reference)
 float gyroOffX = 0, gyroOffY = 0, gyroOffZ = 0;
@@ -174,6 +193,7 @@ float lpg = 0, smoke = 0, co2 = 400, airRatio = 0;      // air quality estimates
 int   mq2Raw = 0, mq135Raw = 0;
 float peakLpg = 0, peakSmoke = 0, peakCo2 = 0;          // worst air during a gas alarm
 bool  silenced = false;                                 // buzzers silenced from the page
+bool  lastWasFire = false;                              // cause of the last real alarm (for the OLED)
 uint32_t quakeCount = 0, fireCount = 0, aftershockCount = 0;
 float windowMax = 0;
 unsigned long windowStartMs = 0;
@@ -230,6 +250,7 @@ void calibrate() {
         good++;
       }
       digitalWrite(PIN_LED, (i / 20) % 2);
+      if (i % 20 == 0) oledCalib(i * 100 / N);
       delay(SAMPLE_PERIOD_MS);
     }
     if (good < N / 2) continue;
@@ -308,6 +329,7 @@ void startQuake(unsigned long now) {
   endTest(now);
   quakeActive = true;
   latched = true;
+  lastWasFire = false;
   quakeStartMs = lastShakeMs = now;
   quakePeak = shakeFast;
   quakeCount++;
@@ -329,6 +351,7 @@ void startFire(unsigned long now) {
   endTest(now);
   fireActive = true;
   latched = true;
+  lastWasFire = true;
   fireStartMs = lastFireMs = now;
   peakLpg = lpg; peakSmoke = smoke; peakCo2 = co2;
   silenced = false;
@@ -593,7 +616,7 @@ void networkTask(void*) {
         "\"uptime\":" + String(now / 1000) + ",\"rssi\":" + String(WiFi.RSSI()) + ",\"heap\":" + String(ESP.getFreeHeap()) + "," +
         "\"traceSeq\":" + String(seq) + ",\"trace\":" + t + "," +
         "\"updated\":{\".sv\":\"timestamp\"}}";
-      fbRequest("PUT", "/live", body, nullptr);
+      cloudOk = fbRequest("PUT", "/live", body, nullptr) == 200;
     }
 
     // ---- Commands from the web page
@@ -613,6 +636,220 @@ void networkTask(void*) {
 
     vTaskDelay(pdMS_TO_TICKS(50));
   }
+}
+
+// ============================================================================
+//                               OLED screen
+// ============================================================================
+// 128x64 layout (on a 128x128 SH1107 it is centred vertically).
+// Monitoring: three pages that rotate — seismograph, air, system.
+// Alarm: flashing inverted screen with a moving EXIT arrow.
+const int WAVE_N = 92;
+float waveF[WAVE_N];
+int   waveHead = 0;
+int   oy = 0, oledPage = 0;
+unsigned long oledPageMs = 0, oledMs = 0;
+const char* ROMAN_O[] = { "I", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "IX", "X" };
+
+void pushWave(float v) { waveF[waveHead] = v; waveHead = (waveHead + 1) % WAVE_N; }
+
+bool i2cPresent(uint8_t a) { Wire.beginTransmission(a); return Wire.endTransmission() == 0; }
+
+void centerStr(int y, const char* t) { oled.drawStr((128 - oled.getStrWidth(t)) / 2, oy + y, t); }
+
+void drawLogo(int x, int y) {        // seismic wave mark
+  const int8_t p[][2] = { {0, 6}, {6, 6}, {9, 0}, {13, 12}, {16, 3}, {18, 6}, {24, 6} };
+  for (int i = 0; i < 6; i++) oled.drawLine(x + p[i][0], oy + y + p[i][1], x + p[i + 1][0], oy + y + p[i + 1][1]);
+}
+
+void drawWifi(int x, int y) {
+  int n = 0;
+  if (WiFi.status() == WL_CONNECTED) { int r = WiFi.RSSI(); n = r > -60 ? 4 : r > -67 ? 3 : r > -75 ? 2 : 1; }
+  for (int i = 0; i < 4; i++) {
+    int h = 2 + i * 2;
+    if (i < n) oled.drawBox(x + i * 3, oy + y + 8 - h, 2, h);
+    else oled.drawPixel(x + i * 3, oy + y + 7);
+  }
+}
+
+void drawCloud(int x, int y) {       // filled = Firebase OK, crossed = offline
+  if (cloudOk) {
+    oled.drawDisc(x + 3, oy + y + 5, 2); oled.drawDisc(x + 6, oy + y + 3, 3); oled.drawDisc(x + 9, oy + y + 5, 2);
+    oled.drawBox(x + 3, oy + y + 5, 7, 3);
+  } else {
+    oled.drawCircle(x + 6, oy + y + 4, 3); oled.drawLine(x + 2, oy + y + 8, x + 10, oy + y);
+  }
+}
+
+void topBar(const char* title) {
+  oled.setFont(u8g2_font_6x10_tr);
+  oled.drawStr(0, oy + 8, title);
+  for (int i = 0; i < 3; i++) {
+    int x = 84 + i * 5;
+    if (i == oledPage) oled.drawBox(x - 1, oy + 3, 3, 3); else oled.drawPixel(x, oy + 4);
+  }
+  drawWifi(102, 0);
+  drawCloud(115, 0);
+  oled.drawHLine(0, oy + 11, 128);
+}
+
+void bar(int x, int y, int w, int h, float f) {
+  f = fminf(1.0f, fmaxf(0.0f, f));
+  oled.drawRFrame(x, oy + y, w, h, 2);
+  int fw = (int)((w - 4) * f);
+  if (fw > 0) oled.drawBox(x + 2, oy + y + 2, fw, h - 4);
+}
+
+void pageSeismo(float minG) {
+  topBar("SEISMO");
+  if (!sensorOk) {
+    oled.setFont(u8g2_font_6x10_tr);
+    centerStr(30, "MPU6050 not found");
+    centerStr(44, "Check SDA 21 / SCL 22");
+    return;
+  }
+  float scale = minG * 2;
+  for (int i = 0; i < WAVE_N; i++) scale = fmaxf(scale, waveF[i] * 1.1f);
+  const int mid = oy + 37, half = 22;
+  for (int i = 0; i < WAVE_N; i++) {               // mirrored envelope, newest on the right
+    int h = (int)fminf(half, waveF[(waveHead + i) % WAVE_N] / scale * half);
+    oled.drawVLine(i, mid - h, 2 * h + 1);
+  }
+  int ty = (int)(minG / scale * half);
+  for (int x = 0; x < WAVE_N; x += 4) { oled.drawPixel(x, mid - ty); oled.drawPixel(x, mid + ty); }  // alarm level
+  // intensity box
+  int m = (int)roundf(mmiFromG(shakeAvg < 0.005f ? 0 : shakeAvg));
+  if (shakeAvg < 0.005f) m = 1;
+  oled.drawRBox(96, oy + 15, 32, 24, 3);
+  oled.setDrawColor(0);
+  oled.setFont(u8g2_font_helvB12_tr);
+  oled.drawStr(112 - oled.getStrWidth(ROMAN_O[m]) / 2, oy + 33, ROMAN_O[m]);
+  oled.setDrawColor(1);
+  oled.setFont(u8g2_font_5x7_tr);
+  oled.drawStr(101, oy + 47, "MMI");
+  char b[12]; snprintf(b, sizeof(b), "%.3fg", shakeAvg);
+  oled.drawStr(128 - oled.getStrWidth(b), oy + 57, b);
+  if ((long)(watchUntilMs - millis()) > 0) oled.drawStr(0, oy + 64, "AFTERSHOCK WATCH");
+}
+
+void pageAir(const Settings& c) {
+  topBar("AIR");
+  oled.setFont(u8g2_font_6x10_tr);
+  if (!AIR_SENSORS_INSTALLED) { centerStr(36, "No air sensors"); return; }
+  if (millis() < GAS_WARMUP_MS) {
+    centerStr(30, "Warming up sensors");
+    bar(14, 38, 100, 10, millis() / (float)GAS_WARMUP_MS);
+    char b[16]; snprintf(b, sizeof(b), "%lus left", (GAS_WARMUP_MS - millis()) / 1000 + 1);
+    centerStr(60, b);
+    return;
+  }
+  const char* n[] = { "LPG", "SMK", "CO2" };
+  float v[] = { lpg, smoke, co2 }, lim[] = { c.lpgLimit, c.smokeLimit, c.co2Limit };
+  for (int i = 0; i < 3; i++) {
+    int y = 15 + i * 17;
+    oled.drawStr(0, oy + y + 8, n[i]);
+    float r = v[i] / lim[i];
+    bar(24, y, 70, 10, r / 1.25f);
+    int tx = 24 + 2 + (int)(66 / 1.25f);           // alarm limit tick
+    oled.drawVLine(tx, oy + y - 2, 14);
+    char b[8]; snprintf(b, sizeof(b), "%d", (int)v[i]);
+    oled.drawStr(128 - oled.getStrWidth(b), oy + y + 8, b);
+    if (r >= 1 && (millis() / 300) % 2) oled.drawFrame(0, oy + y - 1, 22, 12);   // blink when over
+  }
+}
+
+void pageSystem() {
+  topBar("SYSTEM");
+  oled.setFont(u8g2_font_6x10_tr);
+  char b[24];
+  snprintf(b, sizeof(b), "Tilt    %.2f deg", tiltDegrees()); oled.drawStr(0, oy + 23, b);
+  unsigned long s = millis() / 1000;
+  snprintf(b, sizeof(b), "Up      %luh %02lum", s / 3600, (s / 60) % 60); oled.drawStr(0, oy + 34, b);
+  snprintf(b, sizeof(b), "Quakes %lu  Air %lu", (unsigned long)quakeCount, (unsigned long)fireCount); oled.drawStr(0, oy + 45, b);
+  if (WiFi.status() == WL_CONNECTED) oled.drawStr(0, oy + 57, WiFi.localIP().toString().c_str());
+  else oled.drawStr(0, oy + 57, "Wi-Fi: connecting");
+  oled.setFont(u8g2_font_5x7_tr);
+  oled.drawStr(128 - oled.getStrWidth(FLOOR_NAME), oy + 57, FLOOR_NAME);
+}
+
+void screenAlarm(unsigned long now) {
+  bool fire = fireActive || (testActive && testKind == K_FIRE);
+  bool inv = (now / 400) % 2;
+  if (inv) { oled.drawBox(0, oy, 128, 64); oled.setDrawColor(0); }
+  oled.setFont(u8g2_font_helvB12_tr);
+  centerStr(16, testActive ? "TEST ALARM" : fire ? "BAD AIR!" : "EARTHQUAKE!");
+  oled.setFont(u8g2_font_6x10_tr);
+  char b[24];
+  if (fire) {
+    const char* n = "LPG"; float v = lpg, r = lpg / cfg.lpgLimit;
+    if (smoke / cfg.smokeLimit > r) { n = "SMOKE"; v = smoke; r = smoke / cfg.smokeLimit; }
+    if (co2 / cfg.co2Limit > r) { n = "CO2"; v = co2; }
+    snprintf(b, sizeof(b), "%s %d ppm", n, (int)v);
+  } else {
+    float pk = quakePeak > 0 ? quakePeak : shakeAvg;
+    snprintf(b, sizeof(b), "MMI %s  %.2f g", ROMAN_O[(int)roundf(mmiFromG(pk))], pk);
+  }
+  centerStr(30, b);
+  centerStr(42, silenced ? "Buzzer silenced" : "Door open, go out");
+  // moving EXIT arrow
+  oled.setFont(u8g2_font_6x10_tr);
+  oled.drawStr(2, oy + 61, "EXIT");
+  int o = (now / 60) % 16;
+  for (int k = 0; k < 5; k++) {
+    int x = 32 + k * 16 + o;
+    if (x > 120) continue;
+    oled.drawTriangle(x, oy + 51, x, oy + 63, x + 7, oy + 57);
+  }
+  oled.setDrawColor(1);
+}
+
+void screenHold() {
+  oled.drawRFrame(0, oy, 128, 64, 4);
+  oled.setFont(u8g2_font_helvB10_tr);
+  centerStr(16, lastWasFire ? "AIR CLEARED" : "SHAKING STOPPED");
+  oled.setFont(u8g2_font_6x10_tr);
+  centerStr(31, "Door open, lights on");
+  centerStr(43, "Press RESET when");
+  centerStr(55, "the area is safe");
+}
+
+void oledCalib(int pct) {
+  if (!oledOk) return;
+  oled.clearBuffer();
+  drawLogo(52, 6);
+  oled.setFont(u8g2_font_helvB10_tr);
+  centerStr(36, "Calibrating");
+  oled.setFont(u8g2_font_5x7_tr);
+  centerStr(46, "keep the station still");
+  bar(14, 52, 100, 9, pct / 100.0f);
+  oled.sendBuffer();
+}
+
+void oledSplash() {
+  if (!oledOk) return;
+  oled.clearBuffer();
+  drawLogo(52, 4);
+  oled.setFont(u8g2_font_helvB12_tr);
+  centerStr(36, "QuakeGuard");
+  oled.setFont(u8g2_font_5x7_tr);
+  centerStr(48, "Earthquake + air alarm");
+  centerStr(60, "HBRT Afghan-Turk");
+  oled.sendBuffer();
+}
+
+void oledUpdate(unsigned long now, State st, float minG) {
+  if (!oledOk || now - oledMs < 200) return;      // 5 frames per second
+  oledMs = now;
+  if (st == ST_MONITOR && now - oledPageMs >= OLED_PAGE_MS) { oledPageMs = now; oledPage = (oledPage + 1) % 3; }
+  if (st != ST_MONITOR) oledPage = 0;
+  Settings c; portENTER_CRITICAL(&dataMux); c = cfg; portEXIT_CRITICAL(&dataMux);
+  oled.clearBuffer();
+  if (st == ST_ALARM) screenAlarm(now);
+  else if (st == ST_HOLD) screenHold();
+  else if (oledPage == 0) pageSeismo(minG);
+  else if (oledPage == 1) pageAir(c);
+  else pageSystem();
+  oled.sendBuffer();
 }
 
 // ============================================================================
@@ -642,6 +879,16 @@ void setup() {
   doorIsOpen = false;
 
   setBuzzers(true); delay(120); setBuzzers(false);   // power-on beep
+
+  Wire.begin(PIN_SDA, PIN_SCL);
+  if (OLED_ENABLED && (i2cPresent(0x3C) || i2cPresent(0x3D))) {
+    oled.setBusClock(400000);
+    oledOk = oled.begin();
+    oy = (oled.getDisplayHeight() - 64) / 2;
+    oledSplash();
+    delay(1500);
+  }
+  Serial.println(oledOk ? "OLED: found" : "OLED: not found (or disabled)");
 
   sensorOk = mpuBegin();
   if (!sensorOk) Serial.println("ERROR: MPU6050 not found. Check SDA=21, SCL=22, VCC=3.3V, GND.");
@@ -812,7 +1059,10 @@ void loop() {
   live.watchLeftS = watch ? (long)((watchUntilMs - now) / 1000) : 0;
   if (windowDone) { traceRing[traceSeq % TRACE_LEN] = windowMax; traceSeq++; }
   portEXIT_CRITICAL(&dataMux);
-  if (windowDone) { windowMax = 0; windowStartMs = now; }
+  if (windowDone) { pushWave(windowMax); windowMax = 0; windowStartMs = now; }
+
+  // ---------- OLED
+  oledUpdate(now, st, minG);
 
   // ---------- Serial output for tuning
   if (DEBUG_SERIAL && now - lastDebug >= 250) {
