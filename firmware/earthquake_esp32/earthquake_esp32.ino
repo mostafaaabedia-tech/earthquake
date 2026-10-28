@@ -106,7 +106,7 @@ const unsigned long CONFIG_PERIOD_MS = 15000;         // read settings from Fire
 // ------------------------------ OLED ---------------------------------------
 // I2C OLED on the same pins as the MPU6050 (SDA 21, SCL 22). Pick your model:
 //   1 = 0.96" SSD1306 128x64   2 = 1.3" SH1106 128x64   3 = 1.5" SH1107 128x128
-#define OLED_MODEL 1
+#define OLED_MODEL 3
 const bool OLED_ENABLED = true;      // false if no OLED is connected
 const unsigned long OLED_PAGE_MS = 5000;   // time per page while monitoring
 
