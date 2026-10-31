@@ -39,6 +39,8 @@
 #include <ESP32Servo.h>
 #include <math.h>
 #include <U8g2lib.h>
+#include <WebServer.h>
+#include <ESPmDNS.h>
 
 // ============================ USER SETTINGS =================================
 const char* WIFI_SSID     = "YOUR_WIFI_NAME";
@@ -111,7 +113,10 @@ const bool OLED_ENABLED = true;      // false if no OLED is connected
 const unsigned long OLED_PAGE_MS = 5000;   // time per page while monitoring
 
 const bool DEBUG_SERIAL = true;
-const char* FW_VERSION  = "2.0";
+const char* FW_VERSION  = "2.1";
+
+// Name on the local network: http://quakeguard.local (floor 2: "quakeguard-2" ...)
+const char* MDNS_NAME   = "quakeguard";
 // ============================================================================
 
 // MPU6050
@@ -497,6 +502,96 @@ void readConfig() {
 
 const char* kindName(uint8_t k) { return k == K_FIRE ? "fire" : "quake"; }
 
+// ============================================================================
+//            Local page + "find stations" (works on the same Wi-Fi)
+// ============================================================================
+WebServer server(80);
+String stationId;
+volatile bool mdnsOk = false;
+
+String infoJson() {
+  LiveData s; Settings c;
+  portENTER_CRITICAL(&dataMux); s = live; c = cfg; portEXIT_CRITICAL(&dataMux);
+  auto b = [](bool v) { return v ? "true" : "false"; };
+  return String("{\"app\":\"quakeguard\",\"id\":\"") + stationId + "\",\"name\":\"" + FLOOR_NAME +
+    "\",\"path\":\"" + DB_PATH + "\",\"fw\":\"" + FW_VERSION + "\",\"ip\":\"" + WiFi.localIP().toString() +
+    "\",\"mdns\":\"" + MDNS_NAME + ".local\",\"rssi\":" + String(WiFi.RSSI()) + ",\"uptime\":" + String(millis() / 1000) +
+    ",\"state\":\"" + STATE_NAMES[s.state] + "\",\"quake\":" + b(s.quake) + ",\"fire\":" + b(s.fire) +
+    ",\"shake\":" + String(s.shake, 4) + ",\"tilt\":" + String(s.tilt, 2) +
+    ",\"lpg\":" + String(s.lpg, 0) + ",\"smoke\":" + String(s.smoke, 0) + ",\"co2\":" + String(s.co2, 0) +
+    ",\"door\":\"" + (s.doorOpen ? "open" : "closed") + "\",\"light\":" + b(s.light) +
+    ",\"sensorOk\":" + b(s.sensorOk) + ",\"cloud\":" + b(cloudOk) + "}";
+}
+
+const char LOCAL_PAGE[] PROGMEM =
+  "<!doctype html><html lang=\"en\"><head><meta charset=\"utf-8\">\n"
+  "<meta name=\"viewport\" content=\"width=device-width,initial-scale=1\"><title>QuakeGuard station</title>\n"
+  "<style>body{margin:0;font:16px/1.45 system-ui,sans-serif;background:#050d1a;color:#e6f0fb;padding:20px}\n"
+  "main{max-width:520px;margin:0 auto}h1{font-size:1.4rem;margin:0 0 4px}.m{color:#7f98b4;margin:0 0 16px}\n"
+  ".st{padding:16px;border-radius:14px;border:1px solid #1de9b6;background:#0b3a33;font-weight:800;font-size:1.5rem;color:#1de9b6}\n"
+  ".st.a{border-color:#ffb020;background:#2a2110;color:#ffb020}.st.f{border-color:#ff5a3c;background:#2c1511;color:#ff5a3c}\n"
+  "dl{display:grid;grid-template-columns:1fr auto;gap:10px;margin:16px 0;padding:14px;border:1px solid #1a3552;border-radius:14px;background:#0a1a2e}\n"
+  "dt{color:#7f98b4}dd{margin:0;font-weight:600;text-align:right}button{width:100%;min-height:48px;margin-top:8px;border-radius:10px;border:0;font:600 1rem system-ui;background:#1de9b6;color:#04251d}\n"
+  "button.s{background:#0a1a2e;color:#e6f0fb;border:1px solid #1a3552}a{color:#1de9b6}</style></head><body><main>\n"
+  "<h1>QuakeGuard station</h1><p class=\"m\" id=\"n\">Connecting…</p><div class=\"st\" id=\"st\">…</div>\n"
+  "<dl><dt>Vibration</dt><dd id=\"v\">-</dd><dt>Tilt</dt><dd id=\"t\">-</dd><dt>LPG / smoke / CO₂</dt><dd id=\"g\">-</dd>\n"
+  "<dt>Exit door</dt><dd id=\"d\">-</dd><dt>Wi-Fi signal</dt><dd id=\"r\">-</dd><dt>Cloud (Firebase)</dt><dd id=\"c\">-</dd><dt>Running for</dt><dd id=\"u\">-</dd></dl>\n"
+  "<button onclick=\"cmd('silence')\">Silence buzzers</button><button class=\"s\" onclick=\"if(confirm('Reset only when the area is safe. Reset now?'))cmd('reset')\">Reset alarm</button>\n"
+  "<p class=\"m\">This page comes straight from the ESP32 and works on the same Wi-Fi without internet. Full dashboard: <a href=\"https://mostafaaabedia-tech.github.io/earthquake/\">QuakeGuard</a></p>\n"
+  "</main><script>\n"
+  "const $=i=>document.getElementById(i);\n"
+  "async function up(){try{const d=await(await fetch('/info',{cache:'no-store'})).json();\n"
+  "$('n').textContent=d.name+' · '+d.ip+' · '+d.mdns+' · v'+d.fw;\n"
+  "const a=d.state=='ALARM',h=d.state=='HOLD';$('st').className='st'+(a&&d.fire?' f':a||h?' a':'');\n"
+  "$('st').textContent=a?(d.fire?'DANGEROUS AIR':'EARTHQUAKE'):h?'ALARM HOLD – reset when safe':d.sensorOk?'All clear':'Motion sensor not found';\n"
+  "$('v').textContent=d.shake.toFixed(3)+' g';$('t').textContent=d.tilt.toFixed(2)+'°';$('g').textContent=d.lpg+' / '+d.smoke+' / '+d.co2+' ppm';\n"
+  "$('d').textContent=d.door;$('r').textContent=d.rssi+' dBm';$('c').textContent=d.cloud?'online':'offline';\n"
+  "const s=d.uptime;$('u').textContent=Math.floor(s/3600)+' h '+Math.floor(s%3600/60)+' min';}catch(e){$('n').textContent='Station not reachable';}}\n"
+  "async function cmd(c){await fetch('/cmd?c='+c,{method:'POST'});up();}\n"
+  "up();setInterval(up,1000);</script></body></html>\n";
+
+void sendCors() { server.sendHeader("Access-Control-Allow-Origin", "*"); server.sendHeader("Cache-Control", "no-store"); }
+
+void serverTask(void*) {
+  server.on("/", HTTP_GET, []() { sendCors(); server.send_P(200, "text/html; charset=utf-8", LOCAL_PAGE); });
+  server.on("/info", HTTP_GET, []() { sendCors(); server.send(200, "application/json", infoJson()); });
+  server.on("/cmd", HTTP_POST, []() {
+    String c = server.arg("c");
+    if (c == "silence") cmdSilence = true; else if (c == "reset") cmdReset = true;
+    sendCors(); server.send(200, "application/json", "{\"ok\":true}");
+  });
+  server.onNotFound([]() { sendCors(); server.send(404, "text/plain", "Not found"); });
+  bool started = false;
+  for (;;) {
+    if (WiFi.status() == WL_CONNECTED) {
+      if (!started) {
+        server.begin(); started = true;
+        mdnsOk = MDNS.begin(MDNS_NAME);
+        if (mdnsOk) { MDNS.addService("http", "tcp", 80); MDNS.addServiceTxt("http", "tcp", "app", "quakeguard"); }
+        Serial.printf("Local page: http://%s/  or  http://%s.local/\n", WiFi.localIP().toString().c_str(), MDNS_NAME);
+      }
+      server.handleClient();
+    }
+    vTaskDelay(pdMS_TO_TICKS(5));
+  }
+}
+
+// Announce this station in the shared Firebase list, so the dashboard's
+// "Find stations" can see it from anywhere (every 30 s).
+void announceStation() {
+  HTTPClient http;
+  http.setTimeout(6000);
+  String url = String(FIREBASE_URL) + "/earthquake/stations/" + stationId + ".json";
+  if (strlen(FIREBASE_AUTH) > 0) url += "?auth=" + String(FIREBASE_AUTH);
+  if (!http.begin(secureClient, url)) return;
+  http.addHeader("Content-Type", "application/json");
+  String body = infoJson();
+  body.remove(body.length() - 1);
+  body += ",\"lastSeen\":{\".sv\":\"timestamp\"}}";
+  http.PUT(body);
+  http.end();
+}
+
 void networkTask(void*) {
   secureClient.setInsecure();   // simple setup: skip certificate check
 
@@ -507,7 +602,9 @@ void networkTask(void*) {
   bool configLoaded = false;
 
   WiFi.mode(WIFI_STA);
+  WiFi.setHostname(MDNS_NAME);
   WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
+  unsigned long lastAnnounce = 0;
 
   for (;;) {
     unsigned long now = millis();
@@ -516,6 +613,9 @@ void networkTask(void*) {
       vTaskDelay(pdMS_TO_TICKS(200));
       continue;
     }
+
+    // ---- Tell the dashboard where this station is
+    if (lastAnnounce == 0 || now - lastAnnounce >= 30000) { lastAnnounce = now; announceStation(); }
 
     // ---- Settings from the web page
     if (!configLoaded || now - lastConfig >= CONFIG_PERIOD_MS) {
@@ -900,7 +1000,10 @@ void setup() {
   windowStartMs = millis();
 
   if (cloudConfigured()) {
+    char id[16]; snprintf(id, sizeof(id), "qg-%06llx", ESP.getEfuseMac() & 0xFFFFFFULL);
+    stationId = id;
     xTaskCreatePinnedToCore(networkTask, "network", 16384, nullptr, 1, nullptr, 0);
+    xTaskCreatePinnedToCore(serverTask, "web", 8192, nullptr, 1, nullptr, 0);
     Serial.println("Cloud sync: ON (Firebase)");
   } else {
     Serial.println("Cloud sync: OFF — set Wi-Fi and Firebase in USER SETTINGS. Alarm still works.");

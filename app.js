@@ -12,7 +12,10 @@ const $ = (id) => document.getElementById(id);
 const KEY = (k) => { try { return localStorage.getItem("qg_" + k); } catch (e) { return null; } };
 const SAVE = (k, v) => { try { localStorage.setItem("qg_" + k, v); } catch (e) { /* storage off */ } };
 
-const FLOORS = (CFG.floors && CFG.floors.length) ? CFG.floors : [{ name: "Floor 1", path: "earthquake" }];
+const FLOORS = ((CFG.floors && CFG.floors.length) ? CFG.floors : [{ name: "Floor 1", path: "earthquake" }]).slice();
+try {   // stations added from "Find stations" on this device
+  JSON.parse(localStorage.getItem("qg_extraFloors") || "[]").forEach((f) => { if (f && f.path && !FLOORS.some((x) => x.path === f.path)) FLOORS.push(f); });
+} catch (e) { /* storage off */ }
 const BASE = String(CFG.firebaseUrl || "").trim().replace(/\/+$/, "");
 const params = new URLSearchParams(location.search);
 const LIVE = /^https?:\/\//.test(BASE) && !BASE.includes("YOUR-PROJECT") && !params.has("demo");
@@ -753,6 +756,101 @@ function renderCity() {
 
 $("silence").onclick = $("silence2").onclick = () => doSilence();
 
+/* ===================================================== find stations */
+// Each ESP32 announces itself (name, floor path, local IP, signal) in
+// /earthquake/stations every 30 s, so stations are found from anywhere.
+let finderRan = false, finderBusy = false, finderList = [];
+const sigBars = (r) => r == null ? 0 : r > -60 ? 4 : r > -67 ? 3 : r > -75 ? 2 : 1;
+async function findStations() {
+  if (finderBusy) return;
+  finderRan = finderBusy = true;
+  const btn = $("fsearch"), prog = $("fprog");
+  btn.disabled = true; btn.textContent = t("fsSearching");
+  $("finder").classList.add("scanning"); prog.hidden = false; $("fempty").hidden = true;
+  $("fresults").innerHTML = "";
+  let pct = 0, found = [];
+  const setP = (p) => { pct = p; $("fbar").style.width = p + "%"; $("fprogt").textContent = t("fsProg", { p: Math.round(p), n: found.length }); };
+  setP(5);
+  const tick = setInterval(() => { if (pct < 60) setP(pct + 3); }, 120);   // smooth progress while waiting
+  const started = Date.now();
+  try {
+    let list = [];
+    if (DEMO) {
+      await new Promise((r) => setTimeout(r, 1600));
+      list = [{ id: "qg-a1b2c3", name: "Floor 1", path: FLOORS[0].path, ip: "192.168.1.50", mdns: "quakeguard.local", rssi: -54, fw: "2.1", uptime: 5400, state: "MONITORING", sensorOk: true, lastSeen: Date.now() - 8000 },
+              { id: "qg-d4e5f6", name: "Floor 2", path: "floor2", ip: "192.168.1.51", mdns: "quakeguard-2.local", rssi: -71, fw: "2.1", uptime: 860, state: "MONITORING", sensorOk: true, lastSeen: Date.now() - 400000 }];
+    } else {
+      const r = await fetch(`${BASE}/earthquake/stations.json${CFG.auth ? "?auth=" + encodeURIComponent(CFG.auth) : ""}`, { cache: "no-store" });
+      const j = r.ok ? await r.json() : null;
+      list = Object.values(j || {}).filter((s) => s && s.id);
+      while (Date.now() - started < 1200) await new Promise((r) => setTimeout(r, 100));   // let the radar spin
+    }
+    clearInterval(tick);
+    // reveal one by one
+    list.sort((x, y) => (y.lastSeen || 0) - (x.lastSeen || 0));
+    for (let k = 0; k < list.length; k++) {
+      found.push(list[k]); setP(60 + 40 * (k + 1) / list.length);
+      renderFinder(found, true);
+      await new Promise((r) => setTimeout(r, 220));
+    }
+    setP(100);
+    finderList = found;
+    $("fempty").hidden = found.length > 0;
+  } catch (e) {
+    clearInterval(tick); $("fempty").hidden = false;
+  }
+  $("fprogt").textContent = found.length ? t("fsFound", { n: found.length }) : t("fsProg", { p: 100, n: 0 });
+  $("finder").classList.remove("scanning");
+  btn.disabled = false; btn.textContent = t("fsAgain");
+  finderBusy = false;
+}
+function renderFinder(list, animateLast) {
+  $("fresults").innerHTML = list.map((s, i) => {
+    const fresh = s.lastSeen && Date.now() - s.lastSeen < 90000;
+    const showing = FLOORS[curFloor] && FLOORS[curFloor].path === s.path;
+    const n = sigBars(fresh ? s.rssi : null);
+    const bars = [0, 1, 2, 3].map((b) => `<i class="${b < n ? "on" : ""}"></i>`).join("");
+    const alarm = s.state === "ALARM" || s.state === "HOLD";
+    return `<li class="fcard ${fresh ? "on" : "off"} ${alarm ? "alarm" : ""} ${animateLast && i === list.length - 1 ? "pop" : ""}">
+      <div class="fic"><svg viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"><rect x="5" y="3" width="14" height="18" rx="2"/><path d="M9 7h6M9 11h6M12 16h.01"/></svg></div>
+      <div class="finfo"><b>${esc(s.name || s.id)}</b>
+        <small dir="ltr">${esc(s.ip || "—")} · ${esc(s.mdns || "")} · v${esc(s.fw || "?")}</small>
+        <small><span class="fdot"></span>${esc(fresh ? t("fsOnline") : t("fsOffline", { t: s.lastSeen ? ago(s.lastSeen) : "—" }))}${s.sensorOk === false ? " · " + esc(t("fsSensorBad")) : ""}</small></div>
+      <span class="bars">${bars}</span>
+      <div class="fact">
+        ${showing ? `<span class="fthis">${esc(t("fsThis"))}</span>` : `<button class="mini" data-fopen="${i}">${esc(t("fsOpen"))}</button>`}
+        ${s.ip ? `<a class="mini linkbtn" href="http://${esc(s.ip)}/" target="_blank" rel="noopener">${esc(t("fsLocal"))}</a><button class="mini" data-fcopy="${i}">${esc(t("fsCopy"))}</button>` : ""}
+      </div></li>`;
+  }).join("");
+  $("fresults").querySelectorAll("[data-fopen]").forEach((b) => { b.onclick = () => openStation(list[+b.dataset.fopen]); });
+  $("fresults").querySelectorAll("[data-fcopy]").forEach((b) => { b.onclick = async () => { try { await navigator.clipboard.writeText(list[+b.dataset.fcopy].ip); msg("fsCopied"); } catch (e) { /* no clipboard */ } }; });
+}
+function openStation(s) {
+  let i = FLOORS.findIndex((f) => f.path === s.path);
+  if (i < 0) {
+    FLOORS.push({ name: s.name || s.path, path: s.path });
+    sims.push(mk());
+    floorState.push("off");
+    i = FLOORS.length - 1;
+    try {
+      const extra = JSON.parse(localStorage.getItem("qg_extraFloors") || "[]");
+      extra.push({ name: s.name || s.path, path: s.path });
+      localStorage.setItem("qg_extraFloors", JSON.stringify(extra));
+    } catch (e) { /* storage off */ }
+    msg("fsAdded", { name: s.name || s.path });
+  }
+  floorsHtml = ""; pickFloor(i); floorsUI();
+  renderFinder(finderList);
+  document.querySelector('#nav button[data-tab="dash"]').click();
+}
+$("fsearch").onclick = findStations;
+$("openfind").onclick = () => { document.querySelector('#nav button[data-tab="set"]').click(); setTimeout(() => $("finder").scrollIntoView({ behavior: "smooth", block: "start" }), 50); };
+$("fipform").onsubmit = (e) => {
+  e.preventDefault();
+  const v = $("fip").value.trim().replace(/^https?:\/\//, "").replace(/\/.*$/, "");
+  if (v) window.open("http://" + v + "/", "_blank", "noopener");
+};
+
 /* ============================================================ events */
 let events = [], evHash = "", evTime = 0;
 const catResults = {};
@@ -831,6 +929,7 @@ document.querySelectorAll("#nav button").forEach((b) => {
     if (b.dataset.tab === "region") initRegion();
     if (b.dataset.tab === "set") { loadConfig(); makeQr(); }
     if (b.dataset.tab === "air") loadCity();
+    if (b.dataset.tab === "set" && !finderRan) findStations();
   };
 });
 

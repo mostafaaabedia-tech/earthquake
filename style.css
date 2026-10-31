@@ -299,6 +299,43 @@ html[dir=rtl] .crew span{padding:6px 6px 6px 14px}
 .card h2.mt{margin-top:16px}
 @media(max-width:560px){.gauges{gap:2px}.g-val{font-size:22px}.pm b{font-size:2.8rem}}
 
+/* ---------- Find stations ---------- */
+.findbtn{width:100%;margin-top:4px}
+.finder{scroll-margin-top:84px}
+.fhead{display:flex;align-items:center;gap:14px;margin-bottom:12px}
+.fhead h2{margin:0 0 2px!important}
+.radar{position:relative;flex:none;width:64px;height:64px;border-radius:50%;border:1.5px solid color-mix(in srgb,var(--ok) 45%,transparent);background:radial-gradient(circle,color-mix(in srgb,var(--ok) 14%,transparent) 0 28%,transparent 29% 56%,color-mix(in srgb,var(--ok) 10%,transparent) 57% 58%,transparent 59%);overflow:hidden}
+.radar i{position:absolute;inset:0;border-radius:50%;background:conic-gradient(from 0deg,color-mix(in srgb,var(--ok) 55%,transparent),transparent 25%);opacity:.25}
+.radar b{position:absolute;left:50%;top:50%;width:6px;height:6px;margin:-3px;border-radius:50%;background:var(--ok)}
+.radar span{position:absolute;width:5px;height:5px;border-radius:50%;background:var(--ok);opacity:0}
+.radar span:nth-of-type(1){left:18%;top:30%}.radar span:nth-of-type(2){left:66%;top:22%}.radar span:nth-of-type(3){left:58%;top:70%}
+.finder.scanning .radar i{opacity:1;animation:sweep 1.4s linear infinite}
+.finder.scanning .radar span{animation:blip 1.4s ease-out infinite}
+.finder.scanning .radar span:nth-of-type(2){animation-delay:.45s}.finder.scanning .radar span:nth-of-type(3){animation-delay:.9s}
+@keyframes sweep{to{transform:rotate(360deg)}}
+@keyframes blip{0%,60%{opacity:0;transform:scale(.4)}70%{opacity:1;transform:scale(1.4)}100%{opacity:0}}
+.fprog{display:grid;gap:6px;margin-top:12px;font-size:.82rem;color:var(--muted)}
+.fbar{height:6px;border-radius:99px;background:var(--line);overflow:hidden}
+.fbar i{display:block;height:100%;width:0;border-radius:99px;background:linear-gradient(90deg,#1de9b6,#12b5c9);transition:width .3s ease}
+.flist{list-style:none;margin:12px 0 0;padding:0;display:grid;gap:10px}
+.fcard{display:grid;grid-template-columns:44px 1fr auto;gap:4px 12px;align-items:center;padding:12px;border:1px solid var(--line);border-radius:12px;background:var(--bg)}
+.fcard.pop{animation:pop .4s cubic-bezier(.3,1.4,.5,1)}
+@keyframes pop{from{opacity:0;transform:translateY(8px) scale(.97)}}
+.fic{width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--icbg);color:var(--ok)}
+.fcard.off .fic{background:color-mix(in srgb,var(--muted) 14%,transparent);color:var(--muted)}
+.fcard.alarm .fic{background:color-mix(in srgb,var(--fire) 20%,transparent);color:var(--fire)}
+.finfo{min-width:0;display:grid;gap:2px}.finfo b{font-size:1rem}
+.finfo small{color:var(--muted);font-size:.78rem;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.fdot{display:inline-block;width:7px;height:7px;border-radius:50%;margin-inline-end:6px;background:var(--muted);vertical-align:middle}
+.fcard.on .fdot{background:var(--ok);animation:live 2s ease-out infinite}
+.fact{grid-column:1/-1;display:flex;flex-wrap:wrap;gap:8px;align-items:center;margin-top:6px}
+.fact .mini{flex:0 0 auto}
+.linkbtn{display:inline-flex;align-items:center;min-height:36px;padding:0 12px;border-radius:10px;border:1px solid var(--line);color:var(--text);text-decoration:none;font-weight:600;font-size:.85rem}
+.fthis{font-size:.82rem;font-weight:700;color:var(--ok)}
+.fadd{margin-top:14px;border-top:1px solid var(--line);padding-top:10px}
+.fadd summary{cursor:pointer;color:var(--muted);font-weight:600;font-size:.9rem}
+.fipform{display:flex;gap:8px;margin-top:10px}.fipform button{flex:0 0 auto}
+
 /* ---------- Polish ---------- */
 .top{background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 70%,transparent),transparent);backdrop-filter:blur(6px);position:sticky;top:0;z-index:5}
 .top::after{content:"";position:absolute;inset:auto 0 -1px 0;height:1px;background:linear-gradient(90deg,transparent,var(--ok),transparent);opacity:.5}

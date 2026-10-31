@@ -167,6 +167,17 @@ Set your model at the top of the ESP32 code: `#define OLED_MODEL 1` (0.96" SSD13
 
 The top bar shows the page dots, Wi-Fi signal bars, and a cloud icon (filled when Firebase is updating, crossed out when offline). Pages change every 5 seconds.
 
+## Find stations (like the greenhouse app)
+
+**Settings → Find stations** (or **Find stations** in the side panel) searches for your QuakeGuard ESP32s:
+
+- Every ESP32 announces itself in Firebase (`earthquake/stations`) every 30 s: name, floor, **local IP**, `quakeguard.local` name, Wi-Fi signal and firmware. The page finds them from anywhere, with a radar animation and progress bar.
+- Each result shows online/offline, signal bars and three buttons: **Open** (shows that station on the dashboard and adds it to the floor list on this device), **Local page** and **Copy IP**.
+- **Local page:** every ESP32 also serves its own small page at `http://<its IP>/` or `http://quakeguard.local/` (on Android, use the IP). It works on the same Wi-Fi **even without internet**, and has **Silence** and **Reset** buttons. The Serial Monitor prints the address when it connects.
+- **Open a station by IP address:** type the IP to open its local page directly.
+
+Browsers don't let a page on GitHub Pages (https) scan `http://192.168…` addresses, which is why the search goes through Firebase. For a second floor, set `MDNS_NAME` to `quakeguard-2` in that ESP32's code.
+
 ## How it behaves
 
 | State | Buzzers | LED | Door | Light | Ends when |

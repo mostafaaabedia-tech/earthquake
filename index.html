@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css?v=6">
+<link rel="stylesheet" href="style.css?v=7">
 </head>
 <body data-state="ok" data-tab="dash">
 
@@ -71,6 +71,7 @@
     <div class="st-row"><span data-i18n="stSignal">Signal</span><span class="bars" id="stbars"><i></i><i></i><i></i><i></i></span></div>
     <div class="st-row"><span data-i18n="stUptime">Running for</span><b id="stup">—</b></div>
     <div class="st-row"><span data-i18n="stUpdated">Last update</span><b id="stupd">—</b></div>
+    <button class="mini findbtn" id="openfind" data-i18n="fsFindBtn">Find stations</button>
   </div>
   <div class="tagline"><b data-i18n="tagTitle">Safer Buildings. Stronger Communities.</b><span data-i18n="tagText">QuakeGuard helps you detect, respond and stay safe.</span></div>
 </aside>
@@ -229,6 +230,21 @@
     <p class="cap" id="stacap"></p>
   </div>
 
+  <div class="card finder" id="finder" data-t="set" style="order:8">
+    <div class="fhead">
+      <div class="radar" id="radar" aria-hidden="true"><i></i><b></b><span></span><span></span><span></span></div>
+      <div><h2 data-i18n="fsTitle">Find stations</h2><p class="cap m0" data-i18n="fsSub"></p></div>
+    </div>
+    <button class="primary" id="fsearch" data-i18n="fsSearch">Search</button>
+    <div class="fprog" id="fprog" hidden><div class="fbar"><i id="fbar"></i></div><span id="fprogt"></span></div>
+    <ul class="flist" id="fresults"></ul>
+    <p class="cap" id="fempty" hidden data-i18n="fsNothing"></p>
+    <details class="fadd"><summary data-i18n="fsAddIp">Open a station by IP address</summary>
+      <form id="fipform" class="fipform"><input id="fip" inputmode="url" autocomplete="off" dir="ltr" placeholder="192.168.1.50"><button type="submit" data-i18n="fsOpenLocal">Open</button></form>
+      <p class="cap" data-i18n="fsIpCap"></p>
+    </details>
+  </div>
+
   <div class="card" data-t="set" style="order:9">
     <h2><span data-i18n="healthTitle">Sensor health</span>: <span id="hs">-</span></h2>
     <dl id="hl"></dl>
@@ -362,8 +378,8 @@
   </div>
 </section>
 
-<script src="config.js?v=6"></script>
-<script src="i18n.js?v=6"></script>
-<script src="app.js?v=6"></script>
+<script src="config.js?v=7"></script>
+<script src="i18n.js?v=7"></script>
+<script src="app.js?v=7"></script>
 </body>
 </html>
