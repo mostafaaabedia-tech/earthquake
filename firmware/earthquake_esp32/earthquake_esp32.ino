@@ -107,7 +107,9 @@ const unsigned long CONFIG_PERIOD_MS = 15000;         // read settings from Fire
 
 // ------------------------------ OLED ---------------------------------------
 // I2C OLED on the same pins as the MPU6050 (SDA 21, SCL 22). Pick your model:
-//   1 = 0.96" SSD1306 128x64   2 = 1.3" SH1106 128x64   3 = 1.5" SH1107 128x128
+//   1 = 0.96" SSD1306 128x64   2 = 1.3" SH1106 128x64
+//   3 = 1.5" SH1107 128x128 (most blue 4-pin boards)
+//   4 = 1.5" SH1107 128x128, other type: use it if the picture is shifted or cut with 3
 #define OLED_MODEL 3
 const bool OLED_ENABLED = true;      // false if no OLED is connected
 const unsigned long OLED_PAGE_MS = 5000;   // time per page while monitoring
@@ -171,6 +173,8 @@ Servo doorServo;
 #if OLED_MODEL == 2
 U8G2_SH1106_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
 #elif OLED_MODEL == 3
+U8G2_SH1107_SEEED_128X128_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
+#elif OLED_MODEL == 4
 U8G2_SH1107_128X128_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
 #else
 U8G2_SSD1306_128X64_NONAME_F_HW_I2C oled(U8G2_R0, U8X8_PIN_NONE);
