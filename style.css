@@ -336,6 +336,13 @@ html[dir=rtl] .crew span{padding:6px 6px 6px 14px}
 .fadd summary{cursor:pointer;color:var(--muted);font-weight:600;font-size:.9rem}
 .fipform{display:flex;gap:8px;margin-top:10px}.fipform button{flex:0 0 auto}
 
+/* ---------- Light relay ---------- */
+.rlabel{display:flex;justify-content:space-between;margin:16px 0 8px;color:var(--muted);font-size:.9rem}
+.rlabel b{color:var(--text)}
+.relayctl{display:grid;grid-template-columns:repeat(4,1fr);gap:6px}
+.rbtn{flex:none;min-height:40px;padding:0 6px;border-radius:99px;font-size:.85rem}
+.rbtn.on{background:var(--neon);color:#04251d;border-color:var(--neon);box-shadow:0 0 12px color-mix(in srgb,var(--neon) 60%,transparent)}
+
 /* ---------- Polish ---------- */
 .top{background:linear-gradient(180deg,color-mix(in srgb,var(--panel) 70%,transparent),transparent);backdrop-filter:blur(6px);position:sticky;top:0;z-index:5}
 .top::after{content:"";position:absolute;inset:auto 0 -1px 0;height:1px;background:linear-gradient(90deg,transparent,var(--ok),transparent);opacity:.5}

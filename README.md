@@ -151,6 +151,17 @@ These are rough estimates, not calibrated ppm. When any of them stays above its 
 
 **City air:** paste your WeatherAPI.com key into `weatherApiKey` in `config.js` to show Herat's PM2.5 and weather on the Air tab.
 
+## Light relay (GPIO 14)
+
+The relay is driven exactly like the relay test sketch: `digitalWrite(14, LOW)` = relay **ON**, `digitalWrite(14, HIGH)` = relay **OFF** (`RELAY_ACTIVE_LOW = true`).
+
+- At power-up it clicks **ON for 1 second, then OFF** (`RELAY_BOOT_TEST`).
+- **Controls → Light relay** on the dashboard (PIN), the ESP32's local page, or the Serial Monitor (`relay on`, `relay off`, `relay auto`, `relay test`):
+  - **Auto**: on during an alarm and until reset (normal use)
+  - **On** / **Off**: forced
+  - **Test**: 2 s on, 2 s off, like the test sketch
+- Wire the lamp through **COM** and **NO**. Relay VCC → 5 V, GND → GND, IN → GPIO 14.
+
 ## OLED screen
 
 Set your model at the top of the ESP32 code: `#define OLED_MODEL 1` (0.96" SSD1306), `2` (1.3" SH1106) or `3` (1.5" SH1107). If no OLED is found, the ESP32 runs without it.

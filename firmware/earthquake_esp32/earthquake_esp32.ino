@@ -76,7 +76,8 @@ const int PIN_MQ2        = 34;   // MQ-2  AO  (LPG + smoke)   through a divider 
 const int PIN_MQ135      = 35;   // MQ-135 AO (CO2 / bad air) through a divider 5V -> 3.3V
 
 const bool AIR_SENSORS_INSTALLED = true;  // MQ-2 + MQ-135 fitted (false = earthquake only)
-const bool RELAY_ACTIVE_LOW     = true;   // most blue relay modules switch ON with LOW
+const bool RELAY_ACTIVE_LOW     = true;   // your relay: LOW = ON, HIGH = OFF (tested with the relay test sketch)
+const bool RELAY_BOOT_TEST      = true;   // relay clicks ON for 1 s at power-up, so you can see it works
 
 const int DOOR_CLOSED_ANGLE = 0;
 const int DOOR_OPEN_ANGLE   = 90;
@@ -167,6 +168,14 @@ volatile uint32_t resetCount = 0;
 // Commands from the web page
 volatile bool cmdReset = false, cmdTest = false, cmdTestFire = false;
 volatile bool cmdCalibrate = false, cmdEndWatch = false, cmdSilence = false;
+volatile int  cmdRelay = -1;          // new relay mode from the page / Serial / local page
+
+// Light relay mode: AUTO = on during an alarm (normal), ON / OFF = forced,
+// TEST = 2 s ON, 2 s OFF, exactly like the relay test sketch.
+enum RelayMode : uint8_t { RM_AUTO = 0, RM_ON, RM_OFF, RM_TEST };
+const char* RELAY_MODES[] = { "auto", "on", "off", "test" };
+volatile RelayMode relayMode = RM_AUTO;
+volatile bool relayOn = false;
 
 // --------------------------- Sensor state -----------------------------------
 Servo doorServo;
@@ -302,7 +311,20 @@ const char* ROMAN[] = { "I", "I", "II", "III", "IV", "V", "VI", "VII", "VIII", "
 // ============================================================================
 //                               Outputs
 // ============================================================================
-void setRelay(bool on)   { digitalWrite(PIN_RELAY, (on != RELAY_ACTIVE_LOW) ? HIGH : LOW); }
+// Same as the relay test sketch: active-low relay -> digitalWrite(LOW) = ON, digitalWrite(HIGH) = OFF
+void setRelay(bool on) {
+  if (RELAY_ACTIVE_LOW) digitalWrite(PIN_RELAY, on ? LOW : HIGH);
+  else                  digitalWrite(PIN_RELAY, on ? HIGH : LOW);
+  if (on != relayOn) Serial.println(on ? "Relay ON  (LOW)" : "Relay OFF (HIGH)");
+  relayOn = on;
+}
+int relayModeFrom(const String& c) {
+  if (c.indexOf("auto") >= 0) return RM_AUTO;
+  if (c.indexOf("test") >= 0) return RM_TEST;
+  if (c.indexOf("off") >= 0)  return RM_OFF;
+  if (c.indexOf("on") >= 0)   return RM_ON;
+  return -1;
+}
 void setBuzzers(bool on) { digitalWrite(PIN_BUZZER_1, on); digitalWrite(PIN_BUZZER_2, on); }
 
 void setDoor(bool open, unsigned long now) {
@@ -523,7 +545,7 @@ String infoJson() {
     ",\"state\":\"" + STATE_NAMES[s.state] + "\",\"quake\":" + b(s.quake) + ",\"fire\":" + b(s.fire) +
     ",\"shake\":" + String(s.shake, 4) + ",\"tilt\":" + String(s.tilt, 2) +
     ",\"lpg\":" + String(s.lpg, 0) + ",\"smoke\":" + String(s.smoke, 0) + ",\"co2\":" + String(s.co2, 0) +
-    ",\"door\":\"" + (s.doorOpen ? "open" : "closed") + "\",\"light\":" + b(s.light) +
+    ",\"door\":\"" + (s.doorOpen ? "open" : "closed") + "\",\"light\":" + b(s.light) + ",\"relayMode\":\"" + RELAY_MODES[relayMode] + "\"" +
     ",\"sensorOk\":" + b(s.sensorOk) + ",\"cloud\":" + b(cloudOk) + "}";
 }
 
@@ -540,6 +562,7 @@ const char LOCAL_PAGE[] PROGMEM =
   "<h1>QuakeGuard station</h1><p class=\"m\" id=\"n\">Connecting…</p><div class=\"st\" id=\"st\">…</div>\n"
   "<dl><dt>Vibration</dt><dd id=\"v\">-</dd><dt>Tilt</dt><dd id=\"t\">-</dd><dt>LPG / smoke / CO₂</dt><dd id=\"g\">-</dd>\n"
   "<dt>Exit door</dt><dd id=\"d\">-</dd><dt>Wi-Fi signal</dt><dd id=\"r\">-</dd><dt>Cloud (Firebase)</dt><dd id=\"c\">-</dd><dt>Running for</dt><dd id=\"u\">-</dd></dl>\n"
+  "<p class=\"m\" style=\"margin:16px 0 4px\">Light relay: <b id=\"rm\">-</b></p><div style=\"display:grid;grid-template-columns:repeat(4,1fr);gap:6px\"><button class=\"s\" onclick=\"cmd('relay_auto')\">Auto</button><button class=\"s\" onclick=\"cmd('relay_on')\">On</button><button class=\"s\" onclick=\"cmd('relay_off')\">Off</button><button class=\"s\" onclick=\"cmd('relay_test')\">Test</button></div>\n"
   "<button onclick=\"cmd('silence')\">Silence buzzers</button><button class=\"s\" onclick=\"if(confirm('Reset only when the area is safe. Reset now?'))cmd('reset')\">Reset alarm</button>\n"
   "<p class=\"m\">This page comes straight from the ESP32 and works on the same Wi-Fi without internet. Full dashboard: <a href=\"https://mostafaaabedia-tech.github.io/earthquake/\">QuakeGuard</a></p>\n"
   "</main><script>\n"
@@ -549,7 +572,7 @@ const char LOCAL_PAGE[] PROGMEM =
   "const a=d.state=='ALARM',h=d.state=='HOLD';$('st').className='st'+(a&&d.fire?' f':a||h?' a':'');\n"
   "$('st').textContent=a?(d.fire?'DANGEROUS AIR':'EARTHQUAKE'):h?'ALARM HOLD – reset when safe':d.sensorOk?'All clear':'Motion sensor not found';\n"
   "$('v').textContent=d.shake.toFixed(3)+' g';$('t').textContent=d.tilt.toFixed(2)+'°';$('g').textContent=d.lpg+' / '+d.smoke+' / '+d.co2+' ppm';\n"
-  "$('d').textContent=d.door;$('r').textContent=d.rssi+' dBm';$('c').textContent=d.cloud?'online':'offline';\n"
+  "$('d').textContent=d.door;$('r').textContent=d.rssi+' dBm';$('c').textContent=d.cloud?'online':'offline';$('rm').textContent=(d.relayMode||'auto')+(d.light?' · ON':' · OFF');\n"
   "const s=d.uptime;$('u').textContent=Math.floor(s/3600)+' h '+Math.floor(s%3600/60)+' min';}catch(e){$('n').textContent='Station not reachable';}}\n"
   "async function cmd(c){await fetch('/cmd?c='+c,{method:'POST'});up();}\n"
   "up();setInterval(up,1000);</script></body></html>\n";
@@ -561,7 +584,8 @@ void serverTask(void*) {
   server.on("/info", HTTP_GET, []() { sendCors(); server.send(200, "application/json", infoJson()); });
   server.on("/cmd", HTTP_POST, []() {
     String c = server.arg("c");
-    if (c == "silence") cmdSilence = true; else if (c == "reset") cmdReset = true;
+    if (c.startsWith("relay")) cmdRelay = relayModeFrom(c);
+    else if (c == "silence") cmdSilence = true; else if (c == "reset") cmdReset = true;
     sendCors(); server.send(200, "application/json", "{\"ok\":true}");
   });
   server.onNotFound([]() { sendCors(); server.send(404, "text/plain", "Not found"); });
@@ -711,7 +735,7 @@ void networkTask(void*) {
         ",\"co2\":" + String(s.co2, 1) + ",\"airRatio\":" + String(s.airRatio, 3) +
         ",\"mq2\":" + String(s.mq2Raw) + ",\"mq135\":" + String(s.mq135Raw) +
         ",\"lpgLimit\":" + String(c.lpgLimit, 0) + ",\"smokeLimit\":" + String(c.smokeLimit, 0) + ",\"co2Limit\":" + String(c.co2Limit, 0) +
-        ",\"gasWarm\":" + b(s.gasWarm) + ",\"silenced\":" + b(s.silenced) + "," +
+        ",\"gasWarm\":" + b(s.gasWarm) + ",\"silenced\":" + b(s.silenced) + ",\"relayMode\":\"" + RELAY_MODES[relayMode] + "\",\"relayOn\":" + b(relayOn) + "," +
         "\"buzzer\":" + b(s.buzzer) + ",\"led\":" + b(s.led) + ",\"light\":" + b(s.light) + "," +
         "\"door\":\"" + (s.doorOpen ? "open" : "closed") + "\"," +
         "\"sensorOk\":" + b(s.sensorOk) + "," +
@@ -728,7 +752,8 @@ void networkTask(void*) {
       lastCmd = now;
       String resp;
       if (fbRequest("GET", "/command", "", &resp) == 200 && resp != "null" && resp.indexOf("none") < 0) {
-        if (resp.indexOf("testfire") >= 0) cmdTestFire = true;
+        if (resp.indexOf("relay") >= 0) cmdRelay = relayModeFrom(resp);
+        else if (resp.indexOf("testfire") >= 0) cmdTestFire = true;
         else if (resp.indexOf("test") >= 0) cmdTest = true;
         else if (resp.indexOf("reset") >= 0) cmdReset = true;
         else if (resp.indexOf("calibrate") >= 0) cmdCalibrate = true;
@@ -964,9 +989,13 @@ void setup() {
   delay(300);
   Serial.printf("\n=== QuakeGuard v%s — %s ===\n", FW_VERSION, FLOOR_NAME);
 
-  setRelay(false);
   pinMode(PIN_RELAY, OUTPUT);
-  setRelay(false);
+  setRelay(false);                     // OFF from the start (HIGH), like the test sketch
+  if (RELAY_BOOT_TEST) {               // ON 1 s, then OFF
+    Serial.println("Relay test: ON for 1 second");
+    setRelay(true);  delay(1000);
+    setRelay(false);
+  }
   pinMode(PIN_BUZZER_1, OUTPUT);
   pinMode(PIN_BUZZER_2, OUTPUT);
   pinMode(PIN_LED, OUTPUT);
@@ -1125,6 +1154,12 @@ void loop() {
   if (cmdTestFire) { cmdTestFire = false; startTest(now, K_FIRE); }
   if (cmdEndWatch) { cmdEndWatch = false; watchUntilMs = now; aftershockCount = 0; }
   if (cmdSilence)  { cmdSilence = false;  if (currentState() == ST_ALARM) silenced = true; }
+  if (cmdRelay >= 0) { relayMode = (RelayMode)cmdRelay; cmdRelay = -1; Serial.printf("Relay mode: %s\n", RELAY_MODES[relayMode]); }
+  if (Serial.available()) {            // Serial Monitor: relay on / relay off / relay auto / relay test
+    String c = Serial.readStringUntil('\n'); c.trim(); c.toLowerCase();
+    int m = c.startsWith("relay") ? relayModeFrom(c) : -1;
+    if (m >= 0) cmdRelay = m; else if (c.length()) Serial.println("Type: relay on, relay off, relay auto, relay test");
+  }
   if (cmdCalibrate) {
     cmdCalibrate = false;
     if (currentState() == ST_MONITOR && sensorOk) { calibrate(); now = millis(); ignoreUntilMs = now + RESET_IGNORE_MS; }
@@ -1138,7 +1173,11 @@ void loop() {
   bool buzzerOn = alarm && !silenced && (fireSiren ? ((now / 150) % 2 == 0) : ((now / 250) % 3 != 2));
   setBuzzers(buzzerOn);
   digitalWrite(PIN_LED, (alarm || hold) ? HIGH : LOW);
-  setRelay(alarm || hold);
+  bool want = alarm || hold;                       // AUTO: emergency light during the alarm
+  if (relayMode == RM_ON) want = true;
+  else if (relayMode == RM_OFF) want = false;
+  else if (relayMode == RM_TEST) want = (now / 2000) % 2 == 0;
+  setRelay(want);
   setDoor(alarm || hold, now);
 
   // ---------- Seismograph trace (max of each 100 ms window)
@@ -1159,7 +1198,7 @@ void loop() {
   live.lpg = lpg; live.smoke = smoke; live.co2 = co2; live.airRatio = airRatio;
   live.mq2Raw = mq2Raw; live.mq135Raw = mq135Raw;
   live.gasWarm = gasWarm;  live.silenced = silenced;
-  live.buzzer = alarm && !silenced;     live.led = alarm || hold;  live.light = alarm || hold;
+  live.buzzer = alarm && !silenced;     live.led = alarm || hold;  live.light = relayOn;
   live.doorOpen = doorIsOpen;
   live.sensorOk = sensorOk;
   live.quakes = quakeCount; live.fires = fireCount; live.aftershocks = aftershockCount;

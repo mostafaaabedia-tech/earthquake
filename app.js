@@ -540,6 +540,9 @@ function render(d) {
 
   station(d);
   renderAir(d, alarm);
+  const rm = d.relayMode || "auto";
+  document.querySelectorAll("[data-rmode]").forEach((x) => { x.classList.toggle("on", x.dataset.rmode === rm); x.disabled = !online; });
+  $("rlstate").textContent = online ? `${t("rl" + rm[0].toUpperCase() + rm.slice(1))} · ${t(d.light ? "rlIsOn" : "rlIsOff")}` : "—";
   health(d);
   stats(d);
   smsHref();
@@ -1096,6 +1099,7 @@ function normalize(raw, online) {
     peak: +r.peak || 0, peakAll: +r.peakAll || 0, tilt: +r.tilt || 0,
     airEnabled: r.airEnabled != null ? !!r.airEnabled : !!r.gasEnabled, gasWarm: !!r.gasWarm, silenced: !!r.silenced,
     lpg: +r.lpg || 0, smoke: +r.smoke || 0, co2: r.co2 != null ? +r.co2 : 400, mq2: r.mq2, mq135: r.mq135,
+    relayMode: r.relayMode || "auto",
     lpgLimit: +r.lpgLimit || 600, smokeLimit: +r.smokeLimit || 300, co2Limit: +r.co2Limit || 1500,
     buzzer: !!r.buzzer, led: !!r.led, light: !!r.light, door: r.door === "open",
     sensorOk: r.sensorOk !== false, quakes: +r.quakes || 0, fires: +r.fires || 0,
@@ -1235,8 +1239,8 @@ function tick() {
     threshold: sim.cfg.minG, peak: sim.peak, peakAll: sim.peakAll, tilt: sim.tilt + (realQuake ? Math.random() * 0.05 : 0),
     airEnabled: true, lpg, smoke, co2, mq2: Math.round(lpg / 1000 * 4095), mq135: Math.round((co2 - 400) / 1600 * 4095),
     lpgLimit: sim.cfg.lpgLimit, smokeLimit: sim.cfg.smokeLimit, co2Limit: sim.cfg.co2Limit, gasWarm: (now - T0) < 3000,
-    silenced: alarm && sim.silenced,
-    buzzer: alarm && !sim.silenced, led: alarm || sim.latched, light: alarm || sim.latched, door: alarm || sim.latched,
+    silenced: alarm && sim.silenced, relayMode: sim.rmode || "auto",
+    buzzer: alarm && !sim.silenced, led: alarm || sim.latched, light: sim.rmode === "on" ? true : sim.rmode === "off" ? false : sim.rmode === "test" ? Math.floor(now / 2000) % 2 === 0 : alarm || sim.latched, door: alarm || sim.latched,
     sensorOk: !sim.fault, quakes: sim.quakes, fires: sim.fires, aftershocks: sim.aftershocks,
     watchLeft: now < sim.watchUntil ? Math.round((sim.watchUntil - now) / 1000) : 0,
     uptime: Math.round((now - T0) / 1000) + 3600, rssi: -58, heap: 182000, fw: "2.0 demo", safe: safeCount
@@ -1264,6 +1268,11 @@ async function doTest(kind) {
   }
   if (await command(kind === "fire" ? "testfire" : "test")) msg("msgTestSent");
 }
+async function doRelay(mode) {
+  if (DEMO) { sim.rmode = mode; msg("rlSent", { m: t("rl" + mode[0].toUpperCase() + mode.slice(1)) }); return tick(); }
+  if (await command("relay_" + mode)) msg("rlSent", { m: t("rl" + mode[0].toUpperCase() + mode.slice(1)) });
+}
+document.querySelectorAll("[data-rmode]").forEach((b) => { b.onclick = async () => { if (await askPin()) doRelay(b.dataset.rmode); }; });
 async function doSilence() {
   if (DEMO) { if (lastD && lastD.state === "ALARM") sim.silenced = true; msg("msgSilenceSent"); return tick(); }
   silencing = true; if (lastD) render(lastD);

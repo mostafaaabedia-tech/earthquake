@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css?v=7">
+<link rel="stylesheet" href="style.css?v=8">
 </head>
 <body data-state="ok" data-tab="dash">
 
@@ -327,6 +327,14 @@
       <button id="faultbtn" data-i18n="btnFault" hidden>Simulate sensor fault</button>
       <button id="snd">Sound: off</button>
     </div>
+    <p class="rlabel"><span data-i18n="rlTitle">Light relay</span> <b id="rlstate">—</b></p>
+    <div class="relayctl" role="group" aria-label="Light relay">
+      <button class="rbtn" data-rmode="auto" data-i18n="rlAuto">Auto</button>
+      <button class="rbtn" data-rmode="on" data-i18n="rlOn">On</button>
+      <button class="rbtn" data-rmode="off" data-i18n="rlOff">Off</button>
+      <button class="rbtn" data-rmode="test" data-i18n="rlTest">Test</button>
+    </div>
+    <p class="cap" data-i18n="rlCap"></p>
   </div>
 
 
@@ -378,8 +386,8 @@
   </div>
 </section>
 
-<script src="config.js?v=7"></script>
-<script src="i18n.js?v=7"></script>
-<script src="app.js?v=7"></script>
+<script src="config.js?v=8"></script>
+<script src="i18n.js?v=8"></script>
+<script src="app.js?v=8"></script>
 </body>
 </html>
