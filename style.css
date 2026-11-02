@@ -407,3 +407,93 @@ body[data-state=quake] .ring,body[data-state=fire] .ring{animation:ringpulse 1.2
   #pnums{list-style:none;padding:0;font-size:14pt}
   #pqr svg{width:120px;height:120px}
 }
+
+/* =====================================================================
+   Layout v9: simpler, responsive
+   ===================================================================== */
+/* nav with icons */
+#nav button{display:inline-flex;align-items:center;gap:8px}
+#nav svg{width:18px;height:18px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round;flex:none}
+.tabhint{margin:12px 0 0;color:var(--muted);font-size:.92rem}
+.tabhint:empty{display:none}
+
+/* single floor: no floor picker, no side column */
+body.onefloor .floorpick,body.onefloor #side{display:none!important}
+
+/* glance tiles */
+.glance{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:12px}
+.gt{display:grid;grid-template-columns:auto 1fr;grid-template-rows:auto auto auto;column-gap:12px;align-items:center;text-align:start;min-height:0;padding:14px;border-radius:14px;border:1px solid var(--line);background:var(--panel);cursor:pointer;font-weight:400;transition:border-color .3s,background .3s,transform .1s}
+.gt:hover{border-color:var(--muted)}
+.gt-ic{grid-row:1/4;width:44px;height:44px;border-radius:12px;display:grid;place-items:center;background:var(--icbg);color:var(--ok);transition:all .3s}
+.gt-ic svg{width:22px;height:22px;fill:none;stroke:currentColor;stroke-width:2;stroke-linecap:round;stroke-linejoin:round}
+.gt small{color:var(--muted);font-size:.78rem}
+.gt b{font-size:1.15rem;line-height:1.2;color:var(--text);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gt em{font-style:normal;font-size:.75rem;color:var(--muted);overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.gt[data-tone=ok] b{color:var(--ok)}
+.gt[data-tone=warn]{border-color:color-mix(in srgb,var(--quake) 55%,var(--line))}
+.gt[data-tone=warn] b{color:var(--quake)}.gt[data-tone=warn] .gt-ic{background:color-mix(in srgb,var(--quake) 18%,transparent);color:var(--quake)}
+.gt[data-tone=bad]{border-color:var(--fire);background:color-mix(in srgb,var(--fire) 10%,var(--panel))}
+.gt[data-tone=bad] b{color:var(--fire)}.gt[data-tone=bad] .gt-ic{background:color-mix(in srgb,var(--fire) 22%,transparent);color:var(--fire);animation:ringpulse 1.2s ease-out infinite}
+.gt[data-tone=on] b{color:var(--neon)}.gt[data-tone=on] .gt-ic{background:var(--neon);color:#04251d;box-shadow:0 0 14px color-mix(in srgb,var(--neon) 60%,transparent)}
+.gt[data-tone=mute] .gt-ic{background:color-mix(in srgb,var(--muted) 14%,transparent);color:var(--muted)}
+
+/* steps jump up during an alarm */
+body[data-state=quake] #stepscard,body[data-state=fire] #stepscard{order:3!important;border-color:var(--quake)}
+body[data-state=fire] #stepscard{border-color:var(--fire)}
+#stepscard .steps{font-size:1rem}
+
+/* controls */
+.ctl-h{margin:4px 0 0;font-size:.78rem;font-weight:700;letter-spacing:.04em;color:var(--muted);text-transform:uppercase}
+html[dir=rtl] .ctl-h{text-transform:none;letter-spacing:0}
+.ctl-h+.btns{margin-top:8px}
+.btns.two{display:grid;grid-template-columns:1fr 1fr}
+.btns.two>button{min-width:0}
+.btns.two>button[hidden]{display:none}
+.card .ctl-h:not(:first-of-type){margin-top:14px}
+
+/* station card */
+.card.station{display:grid;gap:10px;margin:0;font-size:.9rem}
+
+/* desktop: two columns when there is one floor */
+@media(min-width:1000px){
+  body.onefloor .layout{grid-template-columns:minmax(0,1fr) 360px}
+}
+
+/* tablets and phones */
+@media(max-width:999px){
+  .glance{grid-template-columns:repeat(2,minmax(0,1fr))}
+  /* app-style bottom navigation */
+  #nav{position:fixed;inset:auto 0 0 0;z-index:8;order:0;width:auto;margin:0;display:grid;grid-template-columns:repeat(6,1fr);gap:0;
+       padding:4px 4px max(4px,env(safe-area-inset-bottom));background:color-mix(in srgb,var(--panel) 92%,transparent);backdrop-filter:blur(10px);border-top:1px solid var(--line);overflow:visible}
+  #nav button{flex-direction:column;gap:3px;min-height:56px;padding:4px 0;border:0;border-radius:12px;font-size:.68rem;line-height:1.1}
+  #nav button.on{border:0;background:color-mix(in srgb,var(--ok) 14%,transparent)}
+  #nav svg{width:22px;height:22px}
+  body{padding-bottom:calc(72px + env(safe-area-inset-bottom))}
+  .top{padding-bottom:10px}
+  #conn{margin-inline-start:auto}
+}
+@media(max-width:560px){
+  .layout{gap:12px;padding:12px 12px 24px}
+  .banners{padding:0 12px}
+  .card{padding:14px}
+  .gt{padding:12px;column-gap:10px}
+  .gt-ic{width:38px;height:38px}
+  .gt b{font-size:1rem}
+  #status{gap:12px}
+  #status b{font-size:1.35rem}
+  #status span{font-size:.9rem}
+  .brand small{display:none}
+  .brand b{font-size:1.3rem}
+  /* floor plan: keep it readable, scroll sideways */
+  .plancard .scene{overflow-x:auto;padding:8px;-webkit-overflow-scrolling:touch}
+  .plancard #scene{min-width:620px}
+  .maplegend{gap:6px 12px;font-size:.75rem}
+  .relayctl{gap:4px}
+  .rbtn{font-size:.8rem}
+  .btns{gap:8px}
+  button{min-height:46px}
+}
+@media(max-width:999px){
+  .top{backdrop-filter:none;position:relative;background:var(--bg)}
+  .card.station{order:8!important}
+}

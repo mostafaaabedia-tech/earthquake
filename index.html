@@ -13,7 +13,7 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css?v=8">
+<link rel="stylesheet" href="style.css?v=9">
 </head>
 <body data-state="ok" data-tab="dash">
 
@@ -46,12 +46,12 @@
     <small data-i18n="brandSub">Earthquake Detection &amp; Building Evacuation Monitoring</small>
   </div>
   <nav id="nav" aria-label="Sections">
-    <button data-tab="dash" class="on" data-i18n="tabDash">Dashboard</button>
-    <button data-tab="map" data-i18n="tabMap">Live Map</button>
-    <button data-tab="region" data-i18n="tabRegion">Region</button>
-    <button data-tab="air" data-i18n="tabAir">Air</button>
-    <button data-tab="hist" data-i18n="tabHist">History</button>
-    <button data-tab="set" data-i18n="tabSet">Settings</button>
+    <button data-tab="dash" class="on"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 11l9-7 9 7v9a1 1 0 0 1-1 1h-5v-6h-6v6H4a1 1 0 0 1-1-1z"/></svg><span data-i18n="tabDash">Dashboard</span></button>
+    <button data-tab="map"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M4 4h16v16H4zM4 12h16M10 4v8M14 12v8"/></svg><span data-i18n="tabMap">Live Map</span></button>
+    <button data-tab="region"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M3 12h18M12 3a14 14 0 0 1 0 18M12 3a14 14 0 0 0 0 18"/></svg><span data-i18n="tabRegion">Region</span></button>
+    <button data-tab="air"><svg viewBox="0 0 24 24" aria-hidden="true"><path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8"/></svg><span data-i18n="tabAir">Air</span></button>
+    <button data-tab="hist"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="9"/><path d="M12 7v5l3 2"/></svg><span data-i18n="tabHist">History</span></button>
+    <button data-tab="set"><svg viewBox="0 0 24 24" aria-hidden="true"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.6 1.6 0 0 0 .3 1.8l.1.1a2 2 0 1 1-2.8 2.8l-.1-.1a1.6 1.6 0 0 0-2.7 1.2V21a2 2 0 1 1-4 0v-.1a1.6 1.6 0 0 0-2.7-1.2l-.1.1a2 2 0 1 1-2.8-2.8l.1-.1A1.6 1.6 0 0 0 3.1 14H3a2 2 0 1 1 0-4h.1a1.6 1.6 0 0 0 1.2-2.7l-.1-.1a2 2 0 1 1 2.8-2.8l.1.1A1.6 1.6 0 0 0 10 3.1V3a2 2 0 1 1 4 0v.1a1.6 1.6 0 0 0 2.7 1.2l.1-.1a2 2 0 1 1 2.8 2.8l-.1.1A1.6 1.6 0 0 0 20.9 10H21a2 2 0 1 1 0 4h-.1a1.6 1.6 0 0 0-1.5 1z"/></svg><span data-i18n="tabSet">Settings</span></button>
   </nav>
   <div id="conn" role="status">Connecting</div>
 </header>
@@ -59,6 +59,7 @@
 <div class="banners">
   <p id="demo" class="banner info" hidden data-i18n="demoBanner"></p>
   <p id="fault" class="banner bad" role="alert" hidden></p>
+  <p id="tabhint" class="tabhint"></p>
   <div id="watch" class="banner warn" hidden><span id="watcht"></span> <button id="endwatch" class="mini" data-i18n="endWatch">End watch</button></div>
 </div>
 
@@ -66,13 +67,6 @@
 <aside id="side">
   <h2 data-i18n="floorsTitle">Floors</h2>
   <ul id="flist"></ul>
-  <div class="station">
-    <div class="st-head"><span class="st-dot" id="stdot"></span><b data-i18n="stTitle">Station</b></div>
-    <div class="st-row"><span data-i18n="stSignal">Signal</span><span class="bars" id="stbars"><i></i><i></i><i></i><i></i></span></div>
-    <div class="st-row"><span data-i18n="stUptime">Running for</span><b id="stup">—</b></div>
-    <div class="st-row"><span data-i18n="stUpdated">Last update</span><b id="stupd">—</b></div>
-    <button class="mini findbtn" id="openfind" data-i18n="fsFindBtn">Find stations</button>
-  </div>
   <div class="tagline"><b data-i18n="tagTitle">Safer Buildings. Stronger Communities.</b><span data-i18n="tagText">QuakeGuard helps you detect, respond and stay safe.</span></div>
 </aside>
 
@@ -84,8 +78,15 @@
   </div>
   <p id="msg" style="order:1" role="status"></p>
 
+  <div class="glance" data-t="dash" style="order:2">
+    <button class="gt" id="gtShake" data-go="hist"><span class="gt-ic"><svg viewBox="0 0 24 24"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></span><small data-i18n="gShake">Shaking</small><b>—</b><em></em></button>
+    <button class="gt" id="gtAir" data-go="air"><span class="gt-ic"><svg viewBox="0 0 24 24"><path d="M3 8h11a3 3 0 1 0-3-3M3 12h16a3 3 0 1 1-3 3M3 16h8"/></svg></span><small data-i18n="gAirQ">Air</small><b>—</b><em></em></button>
+    <button class="gt" id="gtDoor" data-go="map"><span class="gt-ic"><svg viewBox="0 0 24 24"><path d="M6 21V4h12v17M3 21h18M14 12h.01"/></svg></span><small data-i18n="gDoor">Exit door</small><b>—</b><em></em></button>
+    <button class="gt" id="gtLight" data-go="map"><span class="gt-ic"><svg viewBox="0 0 24 24"><path d="M9 18h6M10 21h4M12 3a6 6 0 0 0-4 10c1 1 1 2 1 3h6c0-1 0-2 1-3a6 6 0 0 0-4-10z"/></svg></span><small data-i18n="gLight">Emergency light</small><b>—</b><em></em></button>
+  </div>
+
   <!-- Floor plan -->
-  <div class="card" data-t="dash map" style="order:3">
+  <div class="card plancard" data-t="dash map" style="order:4">
     <div class="ph">
       <svg width="22" height="22" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M5 21V4h9v17M14 9h5v12M8 8h3M8 12h3M8 16h3M3 21h18"/></svg>
       <b id="plantitle">Floor – Evacuation Plan</b>
@@ -144,7 +145,7 @@
   </div>
 
   <!-- Intensity -->
-  <div class="card" data-t="dash" style="order:4">
+  <div class="card" data-t="hist" style="order:4">
     <h2 data-i18n="mmiTitle">Shaking intensity</h2>
     <div class="mmi">
       <div class="mmi-now"><span class="mmi-roman" id="mmir">I</span><div><small data-i18n="mmiNow">Now</small><strong id="mmil">Not felt</strong></div></div>
@@ -155,7 +156,7 @@
   </div>
 
   <!-- Vibration -->
-  <div class="card" data-t="dash hist" style="order:5">
+  <div class="card" data-t="hist" style="order:5">
     <h2><span data-i18n="vibTitle">Floor Vibration</span> <span id="bchart" class="bd ok push">Steady</span></h2>
     <canvas id="chart" aria-label="Vibration over the last 60 seconds" role="img"></canvas>
     <p class="cap" id="vibcap"></p>
@@ -173,7 +174,7 @@
     <p id="route" class="m0"></p>
   </div>
 
-  <div class="card" data-t="dash" style="order:8">
+  <div class="card" id="stepscard" data-t="dash" style="order:7">
     <h2 id="stepsh">Be ready</h2>
     <ol class="steps" id="steps"></ol>
   </div>
@@ -280,7 +281,14 @@
 </section>
 
 <section id="right">
-  <div class="card" data-t="dash map air hist set" style="order:2">
+  <div class="card station" data-t="dash set" style="order:3">
+    <div class="st-head"><span class="st-dot" id="stdot"></span><b data-i18n="stTitle">Station</b></div>
+    <div class="st-row"><span data-i18n="stSignal">Signal</span><span class="bars" id="stbars"><i></i><i></i><i></i><i></i></span></div>
+    <div class="st-row"><span data-i18n="stUptime">Running for</span><b id="stup">—</b></div>
+    <div class="st-row"><span data-i18n="stUpdated">Last update</span><b id="stupd">—</b></div>
+    <button class="mini findbtn" id="openfind" data-i18n="fsFindBtn">Find stations</button>
+  </div>
+  <div class="card floorpick" data-t="dash map air hist set" style="order:2">
     <h2 data-i18n="selectFloor">Select Floor</h2>
     <div class="fchips" id="fchips"></div>
   </div>
@@ -307,7 +315,7 @@
     <p class="cap" data-i18n="regionCap"></p>
   </div>
 
-  <div class="card" data-t="dash" style="order:4">
+  <div class="card" data-t="set" style="order:9">
     <h2 data-i18n="sensorTitle">Sensor Status</h2>
     <div class="sc"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 12h4l2-6 4 12 2-6h6"/></svg></div><div><small data-i18n="sVib">Vibration</small><strong id="vib">-</strong></div><span id="bv" class="bd ok">Steady</span></div>
     <div class="sc" id="gascard"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M9 3h6M10 3v6l-5 9a2 2 0 0 0 2 3h10a2 2 0 0 0 2-3l-5-9V3"/></svg></div><div><small data-i18n="sAir">Air quality</small><strong id="gas">-</strong></div><span id="bg" class="bd ok">Normal</span></div>
@@ -317,15 +325,18 @@
     <div class="sc"><div class="ic"><svg width="26" height="26" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true"><path d="M3 20h18M5 20l12-14M17 6v6"/></svg></div><div><small data-i18n="sTilt">Tilt since calibration</small><strong id="tilt">-</strong></div><span id="bt" class="bd ok">Level</span></div>
   </div>
 
-  <div class="card" data-t="dash set" style="order:5">
+  <div class="card" data-t="dash set" style="order:4">
     <h2 data-i18n="ctrlTitle">Controls</h2>
-    <div class="btns">
+    <p class="ctl-h" data-i18n="ctlAlarm">Alarm</p>
+    <div class="btns two">
       <button class="primary" id="reset" data-i18n="btnReset">Reset alarm</button>
       <button id="silence" class="warnbtn" data-i18n="btnSilence">Silence alarm</button>
+    </div>
+    <p class="ctl-h" data-i18n="ctlTest">Try it</p>
+    <div class="btns two">
       <button id="test" data-i18n="btnTestQuake">Test earthquake alarm</button>
       <button id="firebtn" data-i18n="btnTestFire">Test fire alarm</button>
       <button id="faultbtn" data-i18n="btnFault" hidden>Simulate sensor fault</button>
-      <button id="snd">Sound: off</button>
     </div>
     <p class="rlabel"><span data-i18n="rlTitle">Light relay</span> <b id="rlstate">—</b></p>
     <div class="relayctl" role="group" aria-label="Light relay">
@@ -354,6 +365,7 @@
   <div class="card" data-t="set" style="order:13">
     <h2 data-i18n="prefTitle">This device</h2>
     <div class="btns mt0">
+      <button id="snd">Sound: off</button>
       <button id="lang">زبان: دری</button>
       <button id="notif">Notifications: off</button>
       <button id="voice">Voice: off</button>
@@ -386,8 +398,8 @@
   </div>
 </section>
 
-<script src="config.js?v=8"></script>
-<script src="i18n.js?v=8"></script>
-<script src="app.js?v=8"></script>
+<script src="config.js?v=9"></script>
+<script src="i18n.js?v=9"></script>
+<script src="app.js?v=9"></script>
 </body>
 </html>

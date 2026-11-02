@@ -301,7 +301,7 @@ function applyLang() {
   if (DEMO) { $("test").textContent = t("btnSimQuake"); $("firebtn").textContent = t("btnSimFire"); }
   stepsK = ""; evHash = "";
   buildGauges(); renderCity();
-  prefLabels(); showRoute(); renderContacts(); markSafe(); renderTimeline();
+  prefLabels(); tabHint(); showRoute(); renderContacts(); markSafe(); renderTimeline();
   if (lastD) render(lastD);
   if (qData) renderQuakes();
   drawAll();
@@ -390,6 +390,7 @@ const floorState = FLOORS.map(() => "ok");
 const floorName = () => FLOORS[curFloor].name;
 let floorsHtml = "";
 function floorsUI() {
+  document.body.classList.toggle("onefloor", FLOORS.length < 2);
   const dotCol = (s) => s === "ok" ? "var(--ok)" : s === "quake" || s === "hold" ? "var(--quake)" : s === "fire" ? "var(--fire)" : "var(--muted)";
   const h = FLOORS.map((f, i) => `<button class="fchip ${i === curFloor ? "on" : ""} ${floorState[i] === "quake" || floorState[i] === "fire" ? "alarm" : ""}" data-i="${i}" aria-label="${esc(f.name)}" aria-pressed="${i === curFloor}">${esc(f.name.replace(/^\D+/, "") || f.name)}</button>`).join("") + "|" +
     FLOORS.map((f, i) => `<li><button class="fitem ${i === curFloor ? "on" : ""}" data-i="${i}"><i class="dot" style="background:${dotCol(floorState[i])}"></i>${esc(f.name)}</button></li>`).join("");
@@ -540,6 +541,7 @@ function render(d) {
 
   station(d);
   renderAir(d, alarm);
+  glance(d, online, alarm);
   const rm = d.relayMode || "auto";
   document.querySelectorAll("[data-rmode]").forEach((x) => { x.classList.toggle("on", x.dataset.rmode === rm); x.disabled = !online; });
   $("rlstate").textContent = online ? `${t("rl" + rm[0].toUpperCase() + rm.slice(1))} · ${t(d.light ? "rlIsOn" : "rlIsOff")}` : "—";
@@ -548,6 +550,25 @@ function render(d) {
   smsHref();
   if (DEMO) $("faultbtn").textContent = t("btnFault");
 }
+function tile(id, tone, value, sub) {
+  const e = $(id); e.dataset.tone = tone;
+  e.querySelector("b").textContent = value; e.querySelector("em").textContent = sub || "";
+}
+function glance(d, online, alarm) {
+  if (!online) { ["gtShake", "gtAir", "gtDoor", "gtLight"].forEach((id) => tile(id, "mute", "—", "")); return; }
+  const m = mmiInt(d.g), lv = levelOf(d.g), q = alarm && d.quake;
+  if (d.sensorOk === false) tile("gtShake", "bad", t("gNoSensor"), "MPU6050");
+  else tile("gtShake", q || lv >= 2 ? "bad" : lv === 1 ? "warn" : "ok", t("lvl" + (q ? Math.max(lv, 1) : lv)), t("gIntensity", { r: ROMAN[m] }));
+  const al = airLevel(d);
+  tile("gtAir", al === "danger" ? "bad" : al === "fair" ? "warn" : al === "idle" ? "mute" : "ok",
+    !d.airEnabled ? "—" : d.gasWarm ? t("warming") : t(al === "danger" ? "airWordDanger" : al === "fair" ? "airWordFair" : "airWordClean"),
+    d.airEnabled && !d.gasWarm ? t("gAirSub", { gas: `${t(GASES[worstGas(d)].name)} ${Math.round(d[worstGas(d)])} ppm` }) : "");
+  tile("gtDoor", d.door ? "warn" : "ok", t(d.door ? "bOpen" : "bSecure"), t(d.door ? "gOpenSub" : "gClosedSub"));
+  tile("gtLight", d.light ? "on" : "mute", t(d.light ? "bOn" : "bOff"), d.light ? t("gLightOn") : "");
+}
+document.querySelectorAll("[data-go]").forEach((b) => { b.onclick = () => document.querySelector(`#nav button[data-tab="${b.dataset.go}"]`).click(); });
+function tabHint() { $("tabhint").textContent = t("hint_" + document.body.dataset.tab); }
+
 function station(d) {
   const online = d.online !== false;
   $("stdot").className = "st-dot " + (online ? "on" : "off");
@@ -926,6 +947,7 @@ $("dltrace").onclick = () => {
 document.querySelectorAll("#nav button").forEach((b) => {
   b.onclick = () => {
     document.body.dataset.tab = b.dataset.tab;
+    tabHint();
     document.querySelectorAll("#nav button").forEach((x) => x.classList.toggle("on", x === b));
     scrollTo(0, 0);
     requestAnimationFrame(drawAll);
