@@ -155,7 +155,7 @@ These are rough estimates, not calibrated ppm. When any of them stays above its 
 
 The relay is driven exactly like the relay test sketch: `digitalWrite(14, LOW)` = relay **ON**, `digitalWrite(14, HIGH)` = relay **OFF** (`RELAY_ACTIVE_LOW = true`).
 
-- At power-up it clicks **ON for 1 second, then OFF** (`RELAY_BOOT_TEST`).
+- At power-up it clicks **ON and OFF 3 times** (1 s each, `RELAY_BOOT_TEST`, `RELAY_TEST_TIMES`).
 - **Controls → Light relay** on the dashboard (PIN), the ESP32's local page, or the Serial Monitor (`relay on`, `relay off`, `relay auto`, `relay test`):
   - **Auto**: on only for **strong** shaking (peak ≥ 0.06 g, intensity V) or dangerous air, and **off 20 s after the shaking stops**. Both values can be changed in Settings → Detector settings (`relayMinG`, `relayHold`).
   - **On** / **Off**: forced

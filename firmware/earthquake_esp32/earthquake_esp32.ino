@@ -87,7 +87,8 @@ const int PIN_MQ135      = 35;   // MQ-135 AO (CO2 / bad air) through a divider 
 
 const bool AIR_SENSORS_INSTALLED = true;  // MQ-2 + MQ-135 fitted (false = earthquake only)
 const bool RELAY_ACTIVE_LOW     = true;   // your relay: LOW = ON, HIGH = OFF (tested with the relay test sketch)
-const bool RELAY_BOOT_TEST      = true;   // relay clicks ON for 1 s at power-up, so you can see it works
+const bool RELAY_BOOT_TEST      = true;   // relay test at power-up, so you can see it works
+const int  RELAY_TEST_TIMES     = 3;      // how many ON/OFF clicks (1 s ON, 1 s OFF each)
 // AUTO relay: only for a STRONG earthquake, and only for a while.
 //   relayMinG  : shaking must reach this peak (g) before the light turns on (0.06 g = intensity V)
 //   relayHold  : the light turns OFF this many seconds after the shaking stops
@@ -1154,10 +1155,12 @@ void setup() {
 
   pinMode(PIN_RELAY, OUTPUT);
   setRelay(false);                     // OFF from the start (HIGH), like the test sketch
-  if (RELAY_BOOT_TEST) {               // ON 1 s, then OFF
-    Serial.println("Relay test: ON for 1 second");
-    setRelay(true);  delay(1000);
-    setRelay(false);
+  if (RELAY_BOOT_TEST) {               // same as the relay test sketch: LOW (ON) 1 s, HIGH (OFF) 1 s
+    for (int i = 1; i <= RELAY_TEST_TIMES; i++) {
+      Serial.printf("Relay test %d/%d\n", i, RELAY_TEST_TIMES);
+      setRelay(true);  delay(1000);
+      setRelay(false); delay(1000);
+    }
   }
   pinMode(PIN_BUZZER_1, OUTPUT);
   pinMode(PIN_BUZZER_2, OUTPUT);
