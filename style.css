@@ -497,3 +497,117 @@ html[dir=rtl] .ctl-h{text-transform:none;letter-spacing:0}
   .top{backdrop-filter:none;position:relative;background:var(--bg)}
   .card.station{order:8!important}
 }
+
+/* =====================================================================
+   THEME v10 — "Fault Line"
+   Basalt rock, magma accents, topographic + grain textures, seismograph trace
+   ===================================================================== */
+:root,:root[data-theme=dark]{
+  --bg:#0b0c0e;--panel:#14161a;--line:#2a2e35;--text:#f0f1f3;--muted:#949ba6;
+  --ok:#3ddc97;--quake:#ffb02e;--fire:#ff4d3d;--neon:#39ff7a;--brand:#ff7a2f;--brand2:#ff4d1f;
+  --wall:#b4bcc7;--floor:#121418;--corr:#0d0f12;--qbg:#2a1d0a;--fbg:#2c120e;
+  --glow:#2b1408;--okbg1:#0f2a1f;--okbg2:#121418;--chip:#1d2128;--icbg:#152a20;
+  --head:"Barlow Condensed","Bahnschrift","Arial Narrow",system-ui,sans-serif;
+  --topo:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='600' height='600' viewBox='0 0 600 600'%3E%3Cg fill='none' stroke='%23ff7a2f' stroke-opacity='.07' stroke-width='1.2'%3E%3Cpath d='M-50 120C60 60 160 160 260 110S470 30 650 100'/%3E%3Cpath d='M-50 170C70 110 170 210 270 160S480 80 650 150'/%3E%3Cpath d='M-50 220C80 160 180 260 280 210S490 130 650 200'/%3E%3Cpath d='M-50 400C90 330 200 450 320 390S520 320 650 380'/%3E%3Cpath d='M-50 450C100 380 210 500 330 440S530 370 650 430'/%3E%3Cpath d='M-50 500C110 430 220 550 340 490S540 420 650 480'/%3E%3Cellipse cx='460' cy='300' rx='70' ry='38'/%3E%3Cellipse cx='460' cy='300' rx='120' ry='66'/%3E%3Cellipse cx='120' cy='320' rx='50' ry='26'/%3E%3Cellipse cx='120' cy='320' rx='90' ry='48'/%3E%3C/g%3E%3C/svg%3E");
+  --grain:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='180' height='180'%3E%3Cfilter id='n'%3E%3CfeTurbulence type='fractalNoise' baseFrequency='.85' numOctaves='3' stitchTiles='stitch'/%3E%3CfeColorMatrix values='0 0 0 0 1 0 0 0 0 1 0 0 0 0 1 0 0 0 .55 0'/%3E%3C/filter%3E%3Crect width='100%25' height='100%25' filter='url(%23n)'/%3E%3C/svg%3E");
+  --seismo:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='400' height='40' viewBox='0 0 400 40'%3E%3Cpath d='M0 20h40l4-6 4 10 4-14 5 22 4-28 5 30 4-18 4 8 4-4h60l3-4 3 7 3-5h40l5-12 5 22 6-30 6 34 5-20 4 8h50l3-5 3 8 3-3h60l4-8 4 12 4-6h40' fill='none' stroke='%23ff7a2f' stroke-width='1.6' stroke-linejoin='round'/%3E%3C/svg%3E");
+}
+:root[data-theme=light]{
+  --bg:#f2ede5;--panel:#fffdf9;--line:#ded5c8;--text:#1d1a17;--muted:#6e665c;--ok:#0e9f6e;--quake:#b26b00;--fire:#d0341a;
+  --neon:#12b957;--brand:#e8641c;--brand2:#cc4a12;--wall:#4a4239;--floor:#f7f2ea;--corr:#ebe3d6;--qbg:#fff0cf;--fbg:#ffe0da;
+  --glow:#f8dcc4;--okbg1:#e1f5ec;--okbg2:#fffdf9;--chip:#f3e9dc;--icbg:#e3f4ec;
+}
+@media(prefers-color-scheme:light){:root[data-theme=auto]{
+  --bg:#f2ede5;--panel:#fffdf9;--line:#ded5c8;--text:#1d1a17;--muted:#6e665c;--ok:#0e9f6e;--quake:#b26b00;--fire:#d0341a;
+  --neon:#12b957;--brand:#e8641c;--brand2:#cc4a12;--wall:#4a4239;--floor:#f7f2ea;--corr:#ebe3d6;--qbg:#fff0cf;--fbg:#ffe0da;
+  --glow:#f8dcc4;--okbg1:#e1f5ec;--okbg2:#fffdf9;--chip:#f3e9dc;--icbg:#e3f4ec}}
+
+body{font-family:"Barlow",system-ui,-apple-system,"Segoe UI",sans-serif;font-size:1.02rem;
+  background:var(--topo) 0 0/600px 600px,radial-gradient(1100px 520px at 85% -12%,var(--glow) 0,transparent 62%),radial-gradient(900px 600px at -10% 110%,color-mix(in srgb,var(--brand) 9%,transparent) 0,transparent 60%),var(--bg);
+  background-attachment:fixed}
+html[dir=rtl] body{font-family:"Vazirmatn",Tahoma,system-ui,sans-serif}
+body::before{content:"";position:fixed;inset:0;z-index:100;pointer-events:none;background:var(--grain);opacity:.05;mix-blend-mode:overlay}
+
+/* header with seismograph trace and a glowing fault crack */
+.top{position:sticky;top:0;z-index:6;background:linear-gradient(180deg,color-mix(in srgb,var(--bg) 92%,transparent),color-mix(in srgb,var(--bg) 80%,transparent));backdrop-filter:blur(10px);border-bottom:0;overflow:visible}
+.top::before{content:"";position:absolute;inset:auto 0 6px 0;height:40px;background:var(--seismo) 0 50%/400px 40px repeat-x;opacity:.1;pointer-events:none;animation:trace 12s linear infinite}
+@keyframes trace{to{background-position:-400px 50%}}
+.top::after{content:"";position:absolute;inset:auto 0 -3px 0;height:6px;opacity:1;pointer-events:none;
+  background:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='240' height='6' viewBox='0 0 240 6'%3E%3Cpath d='M0 3l18 1 9-2 14 3 11-3 16 2 8-2 20 3 12-2 15 2 10-3 17 3 9-2 21 2 13-2 12 2 15-1' fill='none' stroke='%23ff7a2f' stroke-width='1.5'/%3E%3C/svg%3E") 0 0/240px 6px repeat-x;filter:drop-shadow(0 0 4px var(--brand))}
+.brand{color:var(--brand)}
+.brand b{font:800 1.75rem/1 var(--head);letter-spacing:.01em;text-transform:uppercase}
+.brand b span{color:var(--brand)}
+.brand small{border-color:var(--line)}
+#nav button{font-family:var(--head);font-size:1.05rem;font-weight:700;letter-spacing:.03em;text-transform:uppercase}
+html[dir=rtl] #nav button{font-family:inherit;text-transform:none;letter-spacing:0}
+#nav button.on{color:var(--brand);border-color:var(--brand)}
+#conn{border-color:var(--line);background:color-mix(in srgb,var(--panel) 70%,transparent)}
+
+/* cards: rock strata texture */
+.card{border:1px solid var(--line);border-radius:16px;
+  background:repeating-linear-gradient(-32deg,transparent 0 26px,color-mix(in srgb,var(--text) 2.2%,transparent) 26px 27px),linear-gradient(180deg,color-mix(in srgb,var(--panel) 88%,#fff 4%) 0,var(--panel) 90px);
+  box-shadow:0 1px 0 color-mix(in srgb,#fff 5%,transparent) inset,0 18px 40px -26px #000}
+.card h2{font:700 1.15rem/1.2 var(--head);letter-spacing:.04em;text-transform:uppercase;color:var(--text)}
+html[dir=rtl] .card h2{font-family:inherit;text-transform:none;letter-spacing:0}
+.card>h2::before,.ph b::before{content:"";display:inline-block;width:4px;height:1em;border-radius:2px;background:linear-gradient(var(--brand),var(--brand2));margin-inline-end:10px;vertical-align:-2px;flex:none}
+.ph b{font:700 1.15rem var(--head);letter-spacing:.04em;text-transform:uppercase}
+html[dir=rtl] .ph b{font-family:inherit;text-transform:none}
+
+/* status banner */
+#status{padding:22px 24px;border-radius:18px;border:1px solid color-mix(in srgb,var(--ok) 55%,var(--line));
+  background:var(--seismo) right 24px center/520px 52px no-repeat,linear-gradient(110deg,var(--okbg1),var(--okbg2) 70%);
+  box-shadow:0 0 0 1px color-mix(in srgb,var(--ok) 12%,transparent) inset,0 22px 50px -30px var(--ok)}
+#status b{font:800 2.5rem/1 var(--head);letter-spacing:.02em}
+#status .wave{display:none}
+body[data-state=quake] #status{background:var(--seismo) right 24px center/520px 52px no-repeat,linear-gradient(110deg,var(--qbg),var(--panel) 75%);border-color:var(--quake);animation:quakebox .5s ease-in-out infinite;box-shadow:0 22px 60px -24px var(--quake)}
+body[data-state=fire] #status{background:var(--seismo) right 24px center/520px 52px no-repeat,linear-gradient(110deg,var(--fbg),var(--panel) 75%);border-color:var(--fire);box-shadow:0 22px 60px -24px var(--fire)}
+body[data-state=hold] #status{background:linear-gradient(110deg,var(--qbg),var(--panel) 75%);border-color:color-mix(in srgb,var(--quake) 70%,var(--line))}
+@keyframes quakebox{0%,100%{transform:translateX(0)}25%{transform:translateX(-2px) rotate(-.15deg)}75%{transform:translateX(2px) rotate(.15deg)}}
+.ring{width:66px;height:66px;border-width:3px;box-shadow:0 0 0 6px color-mix(in srgb,currentColor 12%,transparent)}
+
+/* glance tiles */
+.gt{position:relative;overflow:hidden;border-radius:16px;padding:16px;background:linear-gradient(160deg,color-mix(in srgb,var(--panel) 80%,#fff 3%),var(--panel));box-shadow:0 14px 30px -24px #000;transition:transform .15s,border-color .3s}
+.gt::after{content:"";position:absolute;inset:auto 0 0 0;height:3px;background:var(--ok);opacity:.7}
+.gt[data-tone=warn]::after{background:var(--quake)}.gt[data-tone=bad]::after{background:var(--fire);opacity:1}
+.gt[data-tone=on]::after{background:var(--neon)}.gt[data-tone=mute]::after{background:var(--line)}
+.gt:hover{transform:translateY(-2px)}
+.gt b{font:800 1.4rem/1.1 var(--head);letter-spacing:.02em;text-transform:uppercase}
+html[dir=rtl] .gt b{font-family:inherit;text-transform:none}
+.gt-ic{border-radius:14px}
+
+/* buttons */
+button{border-radius:12px;font-family:inherit;font-weight:600}
+button.primary,.btns button.primary{background:linear-gradient(135deg,var(--brand),var(--brand2));color:#1a0b02;border:0;box-shadow:0 10px 24px -14px var(--brand)}
+button.primary:hover:not(:disabled){filter:brightness(1.08)}
+button:focus-visible,select:focus-visible,input:focus-visible,a:focus-visible{outline-color:var(--brand)}
+.ctl-h{color:var(--brand)}
+.rbtn.on{background:var(--brand);border-color:var(--brand);color:#1a0b02;box-shadow:0 0 14px color-mix(in srgb,var(--brand) 55%,transparent)}
+input,select{background:color-mix(in srgb,var(--bg) 70%,var(--panel));border-color:var(--line)}
+
+/* floor plan: blueprint on rock */
+.scene{background:linear-gradient(color-mix(in srgb,var(--brand) 5%,transparent) 1px,transparent 1px) 0 0/22px 22px,linear-gradient(90deg,color-mix(in srgb,var(--brand) 5%,transparent) 1px,transparent 1px) 0 0/22px 22px,radial-gradient(120% 90% at 50% 0%,color-mix(in srgb,var(--brand) 7%,transparent) 0,transparent 70%),var(--bg);border-radius:14px}
+
+/* misc */
+.tabhint{font-size:.95rem}
+.banner{border-radius:12px}
+.banner.info{border-color:var(--brand)}
+.mmi-roman{font-family:var(--head)}
+.foot{opacity:.8}
+.station .st-dot.on{background:var(--ok)}
+.findbtn{border-color:color-mix(in srgb,var(--brand) 40%,var(--line))}
+
+/* mobile */
+@media(max-width:999px){
+  .top{position:relative;backdrop-filter:none;background:color-mix(in srgb,var(--bg) 96%,transparent)}
+  #nav{background:color-mix(in srgb,var(--panel) 94%,transparent);border-top:1px solid var(--line)}
+  #nav button{font-size:.7rem;letter-spacing:.02em}
+  #nav button.on{color:var(--brand);background:color-mix(in srgb,var(--brand) 14%,transparent)}
+  #status{background:linear-gradient(110deg,var(--okbg1),var(--okbg2) 70%)}
+}
+@media(max-width:560px){
+  #status b{font-size:1.8rem}
+  .brand b{font-size:1.5rem}
+  .gt b{font-size:1.15rem}
+  .ring{width:52px;height:52px}
+}
+@media(prefers-reduced-motion:reduce){.top::before,#status{animation:none!important}}

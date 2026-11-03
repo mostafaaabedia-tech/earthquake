@@ -78,6 +78,10 @@ const int PIN_MQ135      = 35;   // MQ-135 AO (CO2 / bad air) through a divider 
 const bool AIR_SENSORS_INSTALLED = true;  // MQ-2 + MQ-135 fitted (false = earthquake only)
 const bool RELAY_ACTIVE_LOW     = true;   // your relay: LOW = ON, HIGH = OFF (tested with the relay test sketch)
 const bool RELAY_BOOT_TEST      = true;   // relay clicks ON for 1 s at power-up, so you can see it works
+// AUTO relay: only for a STRONG earthquake, and only for a while.
+//   relayMinG  : shaking must reach this peak (g) before the light turns on (0.06 g = intensity V)
+//   relayHold  : the light turns OFF this many seconds after the shaking stops
+// Both can also be changed on the web page (Settings -> Detector settings).
 
 const int DOOR_CLOSED_ANGLE = 0;
 const int DOOR_OPEN_ANGLE   = 90;
@@ -93,8 +97,10 @@ struct Settings {
   float    lpgLimit;   // LPG estimate (ppm) for a gas alarm
   float    smokeLimit; // smoke estimate (ppm)
   float    co2Limit;   // CO2 estimate (ppm)
+  float    relayMinG;  // light relay: minimum peak shaking (g)
+  uint32_t relayHoldMs;// light relay: stays on this long after the alarm ends
 };
-Settings cfg = { 0.03f, 3.0f, 1.5f, 25.0f, 800, 15000, 600.0f, 300.0f, 1500.0f };
+Settings cfg = { 0.03f, 3.0f, 1.5f, 25.0f, 800, 15000, 600.0f, 300.0f, 1500.0f, 0.06f, 20000 };
 
 const unsigned long TEST_MS          = 6000;          // test alarm length
 const unsigned long RESET_IGNORE_MS  = 2000;          // ignore shaking after reset
@@ -500,7 +506,8 @@ String settingsJson(const Settings& c) {
          ",\"minDur\":" + String(c.minDurMs / 1000.0f, 2) +
          ",\"quiet\":" + String(c.quietMs / 1000.0f, 1) +
          ",\"lpgLimit\":" + String(c.lpgLimit, 0) + ",\"smokeLimit\":" + String(c.smokeLimit, 0) +
-         ",\"co2Limit\":" + String(c.co2Limit, 0) + "}";
+         ",\"co2Limit\":" + String(c.co2Limit, 0) +
+         ",\"relayMinG\":" + String(c.relayMinG, 3) + ",\"relayHold\":" + String(c.relayHoldMs / 1000.0f, 0) + "}";
 }
 
 void readConfig() {
@@ -522,6 +529,8 @@ void readConfig() {
   if (jsonNumber(resp, "lpgLimit", v)   && v >= 50  && v <= 1000) c.lpgLimit = v;
   if (jsonNumber(resp, "smokeLimit", v) && v >= 50  && v <= 800)  c.smokeLimit = v;
   if (jsonNumber(resp, "co2Limit", v)   && v >= 450 && v <= 2000) c.co2Limit = v;
+  if (jsonNumber(resp, "relayMinG", v)  && v >= 0   && v <= 2)    c.relayMinG = v;
+  if (jsonNumber(resp, "relayHold", v)  && v >= 0   && v <= 3600) c.relayHoldMs = (uint32_t)(v * 1000);
   if (c.staDetrig >= c.staTrig) c.staDetrig = c.staTrig * 0.6f;
   portENTER_CRITICAL(&dataMux); cfg = c; portEXIT_CRITICAL(&dataMux);
 }
@@ -1173,7 +1182,17 @@ void loop() {
   bool buzzerOn = alarm && !silenced && (fireSiren ? ((now / 150) % 2 == 0) : ((now / 250) % 3 != 2));
   setBuzzers(buzzerOn);
   digitalWrite(PIN_LED, (alarm || hold) ? HIGH : LOW);
-  bool want = alarm || hold;                       // AUTO: emergency light during the alarm
+  // AUTO: light ON only for a strong earthquake (peak >= relayMinG), dangerous air or a test,
+  // and OFF again relayHold seconds after the alarm ends (no longer waits for reset).
+  static bool relayLatched = false;
+  static unsigned long relayOffAt = 0;
+  auto extend = [&](unsigned long t) { if (!relayLatched || (long)(t - relayOffAt) > 0) relayOffAt = t; relayLatched = true; };
+  if (quakeActive && quakePeak >= cfg.relayMinG) extend(lastShakeMs + cfg.relayHoldMs);   // 20 s after the last shaking
+  if (fireActive) extend(lastFireMs + cfg.relayHoldMs);
+  if (testActive) extend(now + 200);                                                        // tests: only while testing
+  if (relayLatched && (long)(now - relayOffAt) >= 0) relayLatched = false;
+  if (!alarm && !hold) relayLatched = false;                                                // reset = off at once
+  bool want = relayLatched;
   if (relayMode == RM_ON) want = true;
   else if (relayMode == RM_OFF) want = false;
   else if (relayMode == RM_TEST) want = (now / 2000) % 2 == 0;

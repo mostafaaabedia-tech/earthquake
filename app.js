@@ -1086,14 +1086,14 @@ $("detform").onsubmit = async (e) => {
   e.preventDefault();
   if (!(await askPin())) return;
   const f = new FormData(e.target), c = {};
-  ["minG", "staTrig", "staDetrig", "minDur", "quiet", "lpgLimit", "smokeLimit", "co2Limit"].forEach((k) => { c[k] = +f.get(k); });
+  ["minG", "staTrig", "staDetrig", "minDur", "quiet", "lpgLimit", "smokeLimit", "co2Limit", "relayMinG", "relayHold"].forEach((k) => { c[k] = +f.get(k); });
   if (c.staDetrig >= c.staTrig) c.staDetrig = +(c.staTrig * 0.6).toFixed(2);
   doSaveConfig(c);
 };
 function fillConfig(c) {
   if (!c) return;
   const form = $("detform");
-  ["minG", "staTrig", "staDetrig", "minDur", "quiet", "lpgLimit", "smokeLimit", "co2Limit"].forEach((k) => { if (c[k] != null && document.activeElement !== form[k]) form[k].value = c[k]; });
+  ["minG", "staTrig", "staDetrig", "minDur", "quiet", "lpgLimit", "smokeLimit", "co2Limit", "relayMinG", "relayHold"].forEach((k) => { if (c[k] != null && document.activeElement !== form[k]) form[k].value = c[k]; });
 }
 
 /* ==================================================================
@@ -1207,7 +1207,7 @@ async function command(c) {
    ================================================================== */
 const mk = () => ({ q: 0, qStart: 0, f: 0, test: null, testUntil: 0, latched: false, pq: false, pf: false, qi: null, fi: null,
   quakes: 0, fires: 0, peak: 0, peakAll: 0, ev: [], fault: false, safeMe: false, aS: 0, sta: 0.003, watchUntil: 0, aftershocks: 0,
-  cfg: { minG: 0.03, staTrig: 3, staDetrig: 1.5, minDur: 0.8, quiet: 15, lpgLimit: 600, smokeLimit: 300, co2Limit: 1500 }, silenced: false, seq: 0, tilt: 0.12 });
+  cfg: { minG: 0.03, staTrig: 3, staDetrig: 1.5, minDur: 0.8, quiet: 15, lpgLimit: 600, smokeLimit: 300, co2Limit: 1500, relayMinG: 0.06, relayHold: 20 }, silenced: false, seq: 0, tilt: 0.12 });
 const sims = FLOORS.map(mk);
 let sim = sims[curFloor];
 const T0 = Date.now();

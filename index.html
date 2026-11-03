@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
 <title>QuakeGuard</title>
 <meta name="description" content="QuakeGuard: live earthquake detection and building evacuation dashboard for an ESP32 + MPU6050 station.">
-<meta name="theme-color" content="#050d1a">
+<meta name="theme-color" content="#0b0c0e">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-title" content="QuakeGuard">
@@ -13,7 +13,9 @@
 <link rel="manifest" href="manifest.webmanifest">
 <link rel="icon" href="icons/icon-192.png">
 <link rel="apple-touch-icon" href="icons/icon-192.png">
-<link rel="stylesheet" href="style.css?v=9">
+<link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&family=Vazirmatn:wght@400;600;800&display=swap" rel="stylesheet">
+<link rel="stylesheet" href="style.css?v=10">
 </head>
 <body data-state="ok" data-tab="dash">
 
@@ -262,6 +264,8 @@
       <label><span data-i18n="detLpg">LPG alarm (ppm)</span><input name="lpgLimit" type="number" step="10" min="50" max="1000" required></label>
       <label><span data-i18n="detSmoke">Smoke alarm (ppm)</span><input name="smokeLimit" type="number" step="10" min="50" max="800" required></label>
       <label><span data-i18n="detCo2">CO₂ alarm (ppm)</span><input name="co2Limit" type="number" step="10" min="450" max="2000" required></label>
+      <label><span data-i18n="detRelayG">Light: minimum shaking (g)</span><input name="relayMinG" type="number" step="0.01" min="0" max="2" required></label>
+      <label><span data-i18n="detRelayHold">Light: off after (s)</span><input name="relayHold" type="number" step="1" min="0" max="3600" required></label>
       <div class="btns full"><button class="primary" type="submit" data-i18n="detSave">Save settings</button><button type="button" id="calib" data-i18n="detCalib">Calibrate sensor</button></div>
     </form>
     <p class="cap" data-i18n="detCap"></p>
@@ -398,8 +402,8 @@
   </div>
 </section>
 
-<script src="config.js?v=9"></script>
-<script src="i18n.js?v=9"></script>
-<script src="app.js?v=9"></script>
+<script src="config.js?v=10"></script>
+<script src="i18n.js?v=10"></script>
+<script src="app.js?v=10"></script>
 </body>
 </html>

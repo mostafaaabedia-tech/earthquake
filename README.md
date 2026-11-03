@@ -157,7 +157,7 @@ The relay is driven exactly like the relay test sketch: `digitalWrite(14, LOW)` 
 
 - At power-up it clicks **ON for 1 second, then OFF** (`RELAY_BOOT_TEST`).
 - **Controls → Light relay** on the dashboard (PIN), the ESP32's local page, or the Serial Monitor (`relay on`, `relay off`, `relay auto`, `relay test`):
-  - **Auto**: on during an alarm and until reset (normal use)
+  - **Auto**: on only for **strong** shaking (peak ≥ 0.06 g, intensity V) or dangerous air, and **off 20 s after the shaking stops**. Both values can be changed in Settings → Detector settings (`relayMinG`, `relayHold`).
   - **On** / **Off**: forced
   - **Test**: 2 s on, 2 s off, like the test sketch
 - Wire the lamp through **COM** and **NO**. Relay VCC → 5 V, GND → GND, IN → GPIO 14.
