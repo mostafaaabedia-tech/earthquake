@@ -540,6 +540,7 @@ function render(d) {
   evac(realAlarm || (alarm && d.test), door);
 
   station(d);
+  $("setupcta").hidden = online || DEMO || document.body.dataset.tab === "set";
   renderAir(d, alarm);
   glance(d, online, alarm);
   const rm = d.relayMode || "auto";
@@ -779,6 +780,107 @@ function renderCity() {
 })();
 
 $("silence").onclick = $("silence2").onclick = () => doSilence();
+
+/* =================================================== Bluetooth Wi-Fi setup */
+const BLE = {
+  svc: "7a1e0001-4f3c-4c1e-9b5e-5c0a9e8d1a00", ssid: "7a1e0002-4f3c-4c1e-9b5e-5c0a9e8d1a00", pass: "7a1e0003-4f3c-4c1e-9b5e-5c0a9e8d1a00",
+  cmd: "7a1e0004-4f3c-4c1e-9b5e-5c0a9e8d1a00", stat: "7a1e0005-4f3c-4c1e-9b5e-5c0a9e8d1a00", nets: "7a1e0006-4f3c-4c1e-9b5e-5c0a9e8d1a00",
+  info: "7a1e0007-4f3c-4c1e-9b5e-5c0a9e8d1a00"
+};
+let bleDev = null, bleCh = {}, bleFake = null, bleName = "";
+const bleEnc = new TextEncoder(), bleDec = new TextDecoder();
+function bleSay(k, v, tone) { const e = $("blestat"); e.textContent = t(k, v); e.dataset.tone = tone || ""; }
+function bleLinkedUI(on) {
+  $("bleform").hidden = !on;
+  $("bleconn").textContent = t(on ? "bleDisconnect" : "bleConnect");
+  $("bleconn").classList.toggle("primary", !on);
+  $("bticon").classList.toggle("on", on);
+}
+function bleOnStatus(s) {
+  const tone = s.st === "connected" ? "ok" : s.st === "failed" ? "bad" : s.st === "connecting" || s.st === "scanning" ? "busy" : "";
+  bleSay("bleSt_" + s.st, { ssid: s.ssid || "", ip: s.ip || "" }, tone);
+  $("blesave").disabled = s.st === "connecting";
+  if (s.st === "connected" && LIVE) setTimeout(() => { pollLive(); }, 3000);
+}
+function bleOnNets(list) {
+  const sel = $("blessid"), cur = sel.value;
+  list.sort((x, y) => y.r - x.r);
+  const bars = (r) => r > -60 ? "▂▄▆█" : r > -70 ? "▂▄▆" : r > -80 ? "▂▄" : "▂";
+  sel.innerHTML = list.map((n) => `<option value="${esc(n.s)}">${esc(n.s)}  ${bars(n.r)}${n.l ? " 🔒" : ""}</option>`).join("") +
+    `<option value="__other">${esc(t("bleOther"))}</option>`;
+  if (list.some((n) => n.s === cur)) sel.value = cur;
+  sel.onchange();
+  if (!list.length) bleSay("bleNoNets");
+}
+$("blessid").onchange = () => { $("blessidxw").hidden = $("blessid").value !== "__other"; };
+async function bleWrite(key, value) {
+  if (bleFake) return bleFake.write(key, value);
+  const ch = bleCh[key], data = bleEnc.encode(value);
+  if (ch.writeValueWithResponse) await ch.writeValueWithResponse(data); else await ch.writeValue(data);
+}
+async function bleRead(key) { return bleDec.decode(await bleCh[key].readValue()); }
+function bleDisconnected() {
+  bleDev = null; bleCh = {}; bleFake = null;
+  bleLinkedUI(false); bleSay("bleLost");
+}
+async function bleConnect() {
+  if (bleDev || bleFake) { if (bleDev && bleDev.gatt.connected) bleDev.gatt.disconnect(); else bleDisconnected(); return; }
+  if (DEMO) return bleDemo();
+  if (!navigator.bluetooth) { bleSay("bleNoSupport", null, "bad"); return; }
+  try {
+    bleSay("bleSearching", null, "busy");
+    const dev = await navigator.bluetooth.requestDevice({ filters: [{ services: [BLE.svc] }, { namePrefix: "QuakeGuard" }], optionalServices: [BLE.svc] });
+    bleDev = dev; bleName = dev.name || "QuakeGuard";
+    dev.addEventListener("gattserverdisconnected", bleDisconnected);
+    const srv = await dev.gatt.connect();
+    const svc = await srv.getPrimaryService(BLE.svc);
+    for (const k of ["ssid", "pass", "cmd", "stat", "nets", "info"]) bleCh[k] = await svc.getCharacteristic(BLE[k]);
+    try { const info = JSON.parse(await bleRead("info")); bleName = (info.name || bleName) + " · " + bleName; } catch (e) { /* old firmware */ }
+    bleLinkedUI(true);
+    bleSay("bleLinked", { name: bleName }, "busy");
+    await bleCh.stat.startNotifications();
+    bleCh.stat.addEventListener("characteristicvaluechanged", (e) => { try { bleOnStatus(JSON.parse(bleDec.decode(e.target.value))); } catch (x) { /* partial */ } });
+    await bleCh.nets.startNotifications();
+    bleCh.nets.addEventListener("characteristicvaluechanged", async () => { try { bleOnNets(JSON.parse(await bleRead("nets"))); } catch (x) { /* ignore */ } });
+    try { const s = JSON.parse(await bleRead("stat")); if (s.ssid) $("blessidx").value = s.ssid; } catch (e) { /* ignore */ }
+    await bleWrite("cmd", "scan");
+  } catch (e) {
+    if (e && e.name === "NotFoundError") bleSay("bleCancel"); else bleSay("bleErr", { e: (e && e.message) || e }, "bad");
+    if (bleDev && bleDev.gatt.connected) bleDev.gatt.disconnect(); else { bleDev = null; bleLinkedUI(false); }
+  }
+}
+// Demo: walk through the same steps without a real ESP32
+function bleDemo() {
+  bleSay("bleSearching", null, "busy");
+  setTimeout(() => {
+    bleFake = { write: (k, v) => {
+      if (k === "cmd" && v === "scan") { bleOnStatus({ st: "scanning" }); setTimeout(() => { bleOnNets([{ s: "HBRT-Lab", r: -48, l: 1 }, { s: "Home-WiFi", r: -63, l: 1 }, { s: "Guest", r: -79, l: 0 }]); bleOnStatus({ st: "scanned" }); }, 1400); }
+      if (k === "cmd" && v === "connect") { const ss = bleFake.ssid; bleOnStatus({ st: "connecting", ssid: ss }); setTimeout(() => bleOnStatus({ st: "connected", ssid: ss, ip: "192.168.1.50" }), 2200); }
+      if (k === "cmd" && v === "forget") bleOnStatus({ st: "idle" });
+      if (k === "ssid") bleFake.ssid = v;
+      return Promise.resolve();
+    } };
+    bleName = "Floor 1 · QuakeGuard-a1b2"; bleLinkedUI(true); bleSay("bleLinked", { name: bleName }, "busy");
+    bleWrite("cmd", "scan");
+  }, 900);
+}
+$("bleconn").onclick = bleConnect;
+$("blescan").onclick = () => bleWrite("cmd", "scan").catch((e) => bleSay("bleErr", { e: e.message }, "bad"));
+$("bleshow").onclick = () => { const p = $("blepass"); p.type = p.type === "password" ? "text" : "password"; $("bleshow").textContent = t(p.type === "password" ? "bleShow" : "bleHide"); };
+$("bleform").onsubmit = async (e) => {
+  e.preventDefault();
+  const ssid = $("blessid").value === "__other" || !$("blessid").value ? $("blessidx").value.trim() : $("blessid").value;
+  if (!ssid) { bleSay("bleNeedName", null, "bad"); return; }
+  try {
+    await bleWrite("ssid", ssid); await bleWrite("pass", $("blepass").value); await bleWrite("cmd", "connect");
+    bleSay("bleSent", null, "busy");
+  } catch (x) { bleSay("bleErr", { e: x.message }, "bad"); }
+};
+$("bleforget").onclick = async () => { if (!(await askPin())) return; try { await bleWrite("cmd", "forget"); bleSay("bleForgot"); } catch (x) { bleSay("bleErr", { e: x.message }, "bad"); } };
+$("ctabtn").onclick = () => {
+  document.querySelector('#nav button[data-tab="set"]').click();
+  setTimeout(() => $("blecard").scrollIntoView({ behavior: "smooth", block: "start" }), 60);
+};
 
 /* ===================================================== find stations */
 // Each ESP32 announces itself (name, floor path, local IP, signal) in

@@ -611,3 +611,22 @@ input,select{background:color-mix(in srgb,var(--bg) 70%,var(--panel));border-col
   .ring{width:52px;height:52px}
 }
 @media(prefers-reduced-motion:reduce){.top::before,#status{animation:none!important}}
+
+/* ---------- Bluetooth Wi-Fi setup ---------- */
+.blecard{scroll-margin-top:84px}
+.bticon{flex:none;width:64px;height:64px;border-radius:18px;display:grid;place-items:center;background:color-mix(in srgb,#3b82f6 16%,transparent);color:#60a5fa;border:1px solid color-mix(in srgb,#3b82f6 40%,var(--line))}
+.bticon svg{width:30px;height:30px;fill:none;stroke:currentColor;stroke-width:2.2;stroke-linecap:round;stroke-linejoin:round}
+.bticon.on{background:#3b82f6;color:#fff;box-shadow:0 0 0 0 #3b82f6aa;animation:btpulse 1.8s ease-out infinite}
+@keyframes btpulse{0%{box-shadow:0 0 0 0 #3b82f699}100%{box-shadow:0 0 0 16px transparent}}
+.blesteps{margin:4px 0 14px;padding-inline-start:1.3em;display:grid;gap:4px;color:var(--muted);font-size:.92rem}
+#bleconn{width:100%}
+.blestat{min-height:1.4em;margin:10px 0 0;font-weight:600;color:var(--muted)}
+.blestat[data-tone=ok]{color:var(--ok)}.blestat[data-tone=bad]{color:var(--fire)}
+.blestat[data-tone=busy]::before{content:"";display:inline-block;width:12px;height:12px;margin-inline-end:8px;border-radius:50%;border:2px solid currentColor;border-right-color:transparent;vertical-align:-1px;animation:spin .8s linear infinite}
+@keyframes spin{to{transform:rotate(360deg)}}
+.bleform{display:grid;gap:12px;margin-top:14px;padding-top:14px;border-top:1px dashed var(--line)}
+.bleform label{display:grid;gap:6px;color:var(--muted);font-size:.88rem}
+.blerow{display:flex;gap:8px}.blerow>select,.blerow>input{flex:1;min-width:0}.blerow>button{flex:0 0 auto}
+.linkish{background:none;border:0;color:var(--muted);text-decoration:underline;min-height:36px;justify-self:start;padding:0}
+.banner.cta{display:flex;flex-wrap:wrap;align-items:center;justify-content:space-between;gap:10px;font-weight:600;color:var(--text)}
+.banner.cta .mini{flex:0 0 auto}

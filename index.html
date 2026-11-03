@@ -15,7 +15,7 @@
 <link rel="apple-touch-icon" href="icons/icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
 <link href="https://fonts.googleapis.com/css2?family=Barlow:wght@400;500;600;700&family=Barlow+Condensed:wght@600;700;800&family=Vazirmatn:wght@400;600;800&display=swap" rel="stylesheet">
-<link rel="stylesheet" href="style.css?v=10">
+<link rel="stylesheet" href="style.css?v=11">
 </head>
 <body data-state="ok" data-tab="dash">
 
@@ -61,6 +61,7 @@
 <div class="banners">
   <p id="demo" class="banner info" hidden data-i18n="demoBanner"></p>
   <p id="fault" class="banner bad" role="alert" hidden></p>
+  <div id="setupcta" class="banner info cta" hidden><span data-i18n="bleCta">New station or no Wi-Fi yet? Set up its Wi-Fi from this phone by Bluetooth.</span> <button class="mini primary" id="ctabtn" data-i18n="bleCtaBtn">Set up Wi-Fi</button></div>
   <p id="tabhint" class="tabhint"></p>
   <div id="watch" class="banner warn" hidden><span id="watcht"></span> <button id="endwatch" class="mini" data-i18n="endWatch">End watch</button></div>
 </div>
@@ -233,6 +234,30 @@
     <p class="cap" id="stacap"></p>
   </div>
 
+  <div class="card blecard" id="blecard" data-t="set" style="order:7">
+    <div class="fhead">
+      <div class="bticon" id="bticon" aria-hidden="true"><svg viewBox="0 0 24 24"><path d="M7 7l10 10-5 5V2l5 5L7 17"/></svg></div>
+      <div><h2 data-i18n="bleTitle">Set up Wi-Fi by Bluetooth</h2><p class="cap m0" data-i18n="bleSub"></p></div>
+    </div>
+    <ol class="blesteps">
+      <li data-i18n="bleStep1">Power on the ESP32 near this phone.</li>
+      <li data-i18n="bleStep2">Press Connect and choose “QuakeGuard-…”.</li>
+      <li data-i18n="bleStep3">Pick your Wi-Fi, type the password, press Save.</li>
+    </ol>
+    <button class="primary" id="bleconn" data-i18n="bleConnect">Connect by Bluetooth</button>
+    <p class="blestat" id="blestat" role="status"></p>
+    <form id="bleform" class="bleform" hidden>
+      <label><span data-i18n="bleNet">Wi-Fi network</span>
+        <div class="blerow"><select id="blessid"></select><button type="button" class="mini" id="blescan" data-i18n="bleScan">Scan</button></div></label>
+      <label id="blessidxw" hidden><span data-i18n="bleNetName">Network name</span><input id="blessidx" autocomplete="off" dir="ltr"></label>
+      <label><span data-i18n="blePass">Password</span>
+        <div class="blerow"><input id="blepass" type="password" autocomplete="off" dir="ltr"><button type="button" class="mini" id="bleshow" data-i18n="bleShow">Show</button></div></label>
+      <button class="primary" type="submit" id="blesave" data-i18n="bleSave">Save &amp; connect</button>
+      <button type="button" class="mini linkish" id="bleforget" data-i18n="bleForget">Forget saved Wi-Fi</button>
+    </form>
+    <p class="cap" id="blenote" data-i18n="bleNote"></p>
+  </div>
+
   <div class="card finder" id="finder" data-t="set" style="order:8">
     <div class="fhead">
       <div class="radar" id="radar" aria-hidden="true"><i></i><b></b><span></span><span></span><span></span></div>
@@ -402,8 +427,8 @@
   </div>
 </section>
 
-<script src="config.js?v=10"></script>
-<script src="i18n.js?v=10"></script>
-<script src="app.js?v=10"></script>
+<script src="config.js?v=11"></script>
+<script src="i18n.js?v=11"></script>
+<script src="app.js?v=11"></script>
 </body>
 </html>

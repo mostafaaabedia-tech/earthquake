@@ -41,10 +41,20 @@
 #include <U8g2lib.h>
 #include <WebServer.h>
 #include <ESPmDNS.h>
+#include <Preferences.h>
+#include <BLEDevice.h>
+#include <BLEServer.h>
+#include <BLE2902.h>
 
 // ============================ USER SETTINGS =================================
+// Wi-Fi: easiest is the web page -> Settings -> "Set up Wi-Fi by Bluetooth".
+// The name and password are then saved in the ESP32 and used after every restart.
+// You can still type them here instead (used only when nothing is saved).
+// To forget the saved Wi-Fi: hold the RESET button while powering on.
+// IMPORTANT: Arduino IDE -> Tools -> Partition Scheme -> "Huge APP (3MB No OTA/1MB SPIFFS)"
 const char* WIFI_SSID     = "YOUR_WIFI_NAME";
 const char* WIFI_PASSWORD = "YOUR_WIFI_PASSWORD";
+const unsigned long BLE_OFF_AFTER_MS = 300000;   // Bluetooth turns off 5 min after Wi-Fi connects (frees memory)
 
 // Firebase Realtime Database URL, without a trailing slash
 const char* FIREBASE_URL  = "https://quakeguard-earthquake-default-rtdb.europe-west1.firebasedatabase.app";
@@ -432,7 +442,7 @@ void resetSystem(unsigned long now) {
 WiFiClientSecure secureClient;
 
 bool cloudConfigured() {
-  return strstr(WIFI_SSID, "YOUR_") == nullptr && strstr(FIREBASE_URL, "YOUR-PROJECT") == nullptr;
+  return strstr(FIREBASE_URL, "YOUR-PROJECT") == nullptr;
 }
 
 String fbUrl(const String& path) {
@@ -629,6 +639,119 @@ void announceStation() {
   http.end();
 }
 
+// ============================================================================
+//                Wi-Fi setup over Bluetooth (from the web page)
+// ============================================================================
+// The page connects with Web Bluetooth (Chrome / Edge on Android, Windows, Mac),
+// asks the ESP32 to scan for Wi-Fi networks, then sends the name + password.
+#define BLE_SVC   "7a1e0001-4f3c-4c1e-9b5e-5c0a9e8d1a00"
+#define BLE_SSID  "7a1e0002-4f3c-4c1e-9b5e-5c0a9e8d1a00"   // write: network name
+#define BLE_PASS  "7a1e0003-4f3c-4c1e-9b5e-5c0a9e8d1a00"   // write: password
+#define BLE_CMD   "7a1e0004-4f3c-4c1e-9b5e-5c0a9e8d1a00"   // write: "connect" | "scan" | "forget"
+#define BLE_STAT  "7a1e0005-4f3c-4c1e-9b5e-5c0a9e8d1a00"   // read/notify: status JSON
+#define BLE_NETS  "7a1e0006-4f3c-4c1e-9b5e-5c0a9e8d1a00"   // read/notify: networks JSON
+#define BLE_INFO  "7a1e0007-4f3c-4c1e-9b5e-5c0a9e8d1a00"   // read: station info JSON
+
+Preferences wifiPrefs;
+String wifiSsid, wifiPass;              // the Wi-Fi in use
+String pendSsid, pendPass;              // received over Bluetooth
+volatile bool bleConnectReq = false, bleScanReq = false, bleForgetReq = false;
+volatile bool bleOn = false;
+BLEServer* bleServer = nullptr;
+BLECharacteristic *chStat = nullptr, *chNets = nullptr;
+
+void bleStatus(const char* st, const String& extra = "") {
+  if (!bleOn || !chStat) return;
+  String j = String("{\"st\":\"") + st + "\",\"ssid\":\"" + wifiSsid + "\",\"ip\":\"" +
+             (WiFi.status() == WL_CONNECTED ? WiFi.localIP().toString() : String("")) + "\"" + extra + "}";
+  chStat->setValue(j);
+  chStat->notify();
+}
+
+class BleSrvCb : public BLEServerCallbacks {
+  void onConnect(BLEServer*) override { Serial.println("Bluetooth: phone connected"); }
+  void onDisconnect(BLEServer*) override { Serial.println("Bluetooth: phone disconnected"); delay(200); BLEDevice::startAdvertising(); }
+};
+class BleWriteCb : public BLECharacteristicCallbacks {
+  void onWrite(BLECharacteristic* c) override {
+    String v = c->getValue();
+    String u = c->getUUID().toString().c_str();
+    if (u == BLE_SSID) pendSsid = v;
+    else if (u == BLE_PASS) pendPass = v;
+    else if (u == BLE_CMD) {
+      v.trim();
+      if (v == "connect") bleConnectReq = true;
+      else if (v == "scan") bleScanReq = true;
+      else if (v == "forget") bleForgetReq = true;
+    }
+  }
+};
+
+void startBle() {
+  String name = "QuakeGuard-" + stationId.substring(stationId.length() - 4);
+  BLEDevice::init(name.c_str());
+  bleServer = BLEDevice::createServer();
+  bleServer->setCallbacks(new BleSrvCb());
+  BLEService* svc = bleServer->createService(BLEUUID(BLE_SVC), 32);
+  auto* wcb = new BleWriteCb();
+  svc->createCharacteristic(BLE_SSID, BLECharacteristic::PROPERTY_WRITE)->setCallbacks(wcb);
+  svc->createCharacteristic(BLE_PASS, BLECharacteristic::PROPERTY_WRITE)->setCallbacks(wcb);
+  svc->createCharacteristic(BLE_CMD,  BLECharacteristic::PROPERTY_WRITE)->setCallbacks(wcb);
+  chStat = svc->createCharacteristic(BLE_STAT, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+  chStat->addDescriptor(new BLE2902());
+  chNets = svc->createCharacteristic(BLE_NETS, BLECharacteristic::PROPERTY_READ | BLECharacteristic::PROPERTY_NOTIFY);
+  chNets->addDescriptor(new BLE2902());
+  chNets->setValue("[]");
+  BLECharacteristic* chInfo = svc->createCharacteristic(BLE_INFO, BLECharacteristic::PROPERTY_READ);
+  chInfo->setValue(String("{\"name\":\"") + FLOOR_NAME + "\",\"id\":\"" + stationId + "\",\"fw\":\"" + FW_VERSION + "\",\"path\":\"" + DB_PATH + "\"}");
+  svc->start();
+  BLEAdvertising* adv = BLEDevice::getAdvertising();
+  adv->addServiceUUID(BLE_SVC);
+  adv->setScanResponse(true);
+  BLEDevice::startAdvertising();
+  bleOn = true;
+  bleStatus(WiFi.status() == WL_CONNECTED ? "connected" : wifiSsid.length() ? "saved" : "idle");
+  Serial.printf("Bluetooth setup ON: %s (open the web page -> Settings -> Set up Wi-Fi)\n", name.c_str());
+}
+
+void stopBle() {
+  if (!bleOn) return;
+  bleOn = false;
+  chStat = chNets = nullptr;
+  BLEDevice::deinit(true);   // frees the Bluetooth memory for HTTPS
+  Serial.println("Bluetooth setup OFF (Wi-Fi is working). Hold RESET at power-on to set up again.");
+}
+
+void bleScanNetworks() {
+  bleStatus("scanning");
+  int n = WiFi.scanNetworks(false, false);
+  String j = "[";
+  int count = 0;
+  for (int i = 0; i < n && count < 12; i++) {
+    String ss = WiFi.SSID(i);
+    if (ss.length() == 0 || ss.indexOf('"') >= 0 || ss.indexOf('\\') >= 0) continue;
+    bool dup = false;
+    for (int k = 0; k < i; k++) if (WiFi.SSID(k) == ss) { dup = true; break; }
+    if (dup) continue;
+    String item = String(count ? "," : "") + "{\"s\":\"" + ss + "\",\"r\":" + WiFi.RSSI(i) + ",\"l\":" + (WiFi.encryptionType(i) == WIFI_AUTH_OPEN ? 0 : 1) + "}";
+    if (j.length() + item.length() > 480) break;
+    j += item; count++;
+  }
+  j += "]";
+  WiFi.scanDelete();
+  if (chNets) { chNets->setValue(j); chNets->notify(); }
+  bleStatus(WiFi.status() == WL_CONNECTED ? "connected" : "scanned");
+  Serial.printf("Bluetooth: sent %d Wi-Fi networks\n", count);
+}
+
+void loadWifi() {
+  wifiPrefs.begin("wifi", false);
+  wifiSsid = wifiPrefs.getString("ssid", "");
+  wifiPass = wifiPrefs.getString("pass", "");
+  if (wifiSsid.length() == 0 && strstr(WIFI_SSID, "YOUR_") == nullptr) { wifiSsid = WIFI_SSID; wifiPass = WIFI_PASSWORD; }
+  Serial.println(wifiSsid.length() ? "Wi-Fi: " + wifiSsid : String("Wi-Fi: none saved, use Bluetooth setup"));
+}
+
 void networkTask(void*) {
   secureClient.setInsecure();   // simple setup: skip certificate check
 
@@ -640,13 +763,44 @@ void networkTask(void*) {
 
   WiFi.mode(WIFI_STA);
   WiFi.setHostname(MDNS_NAME);
-  WiFi.begin(WIFI_SSID, WIFI_PASSWORD);
-  unsigned long lastAnnounce = 0;
+  if (wifiSsid.length()) WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+  unsigned long lastAnnounce = 0, connectedAt = 0, tryStart = millis();
+  bool wasConnected = false, reportedFail = false;
 
   for (;;) {
     unsigned long now = millis();
-    if (WiFi.status() != WL_CONNECTED) {
-      if (now - lastWifiTry > 10000) { lastWifiTry = now; WiFi.disconnect(); WiFi.begin(WIFI_SSID, WIFI_PASSWORD); }
+
+    // ---- Bluetooth Wi-Fi setup requests
+    if (bleScanReq) { bleScanReq = false; bleScanNetworks(); }
+    if (bleForgetReq) {
+      bleForgetReq = false;
+      wifiPrefs.remove("ssid"); wifiPrefs.remove("pass");
+      wifiSsid = ""; wifiPass = ""; WiFi.disconnect();
+      bleStatus("idle");
+    }
+    if (bleConnectReq) {
+      bleConnectReq = false;
+      wifiSsid = pendSsid; wifiPass = pendPass;
+      wifiPrefs.putString("ssid", wifiSsid); wifiPrefs.putString("pass", wifiPass);
+      Serial.println("Bluetooth: new Wi-Fi received: " + wifiSsid);
+      WiFi.disconnect(); vTaskDelay(pdMS_TO_TICKS(300));
+      WiFi.begin(wifiSsid.c_str(), wifiPass.c_str());
+      tryStart = lastWifiTry = now; reportedFail = false; wasConnected = false;
+      bleStatus("connecting");
+    }
+
+    bool up = WiFi.status() == WL_CONNECTED;
+    if (up && !wasConnected) {
+      wasConnected = true; connectedAt = now;
+      Serial.println("Wi-Fi connected: " + WiFi.localIP().toString());
+      bleStatus("connected");
+    }
+    if (!up && wasConnected) wasConnected = false;
+    if (up && bleOn && now - connectedAt > BLE_OFF_AFTER_MS && bleServer && bleServer->getConnectedCount() == 0) stopBle();
+
+    if (!up) {
+      if (!reportedFail && wifiSsid.length() && now - tryStart > 20000) { reportedFail = true; bleStatus("failed"); }
+      if (wifiSsid.length() && now - lastWifiTry > 10000) { lastWifiTry = now; WiFi.disconnect(); WiFi.begin(wifiSsid.c_str(), wifiPass.c_str()); }
       vTaskDelay(pdMS_TO_TICKS(200));
       continue;
     }
@@ -1041,9 +1195,16 @@ void setup() {
   live.gasWarm = AIR_SENSORS_INSTALLED;
   windowStartMs = millis();
 
+  char sid[16]; snprintf(sid, sizeof(sid), "qg-%06llx", ESP.getEfuseMac() & 0xFFFFFFULL);
+  stationId = sid;
+  loadWifi();
+  if (digitalRead(PIN_RESET_BTN) == LOW) {            // RESET held at power-on: forget Wi-Fi
+    wifiPrefs.remove("ssid"); wifiPrefs.remove("pass"); wifiSsid = ""; wifiPass = "";
+    Serial.println("RESET held: saved Wi-Fi forgotten. Use Bluetooth setup.");
+    setBuzzers(true); delay(80); setBuzzers(false); delay(80); setBuzzers(true); delay(80); setBuzzers(false);
+  }
+  startBle();
   if (cloudConfigured()) {
-    char id[16]; snprintf(id, sizeof(id), "qg-%06llx", ESP.getEfuseMac() & 0xFFFFFFULL);
-    stationId = id;
     xTaskCreatePinnedToCore(networkTask, "network", 16384, nullptr, 1, nullptr, 0);
     xTaskCreatePinnedToCore(serverTask, "web", 8192, nullptr, 1, nullptr, 0);
     Serial.println("Cloud sync: ON (Firebase)");

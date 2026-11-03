@@ -107,7 +107,7 @@ This is fine for a school project. For a real building, use Firebase Authenticat
 ## 2. ESP32
 
 1. Arduino IDE → Boards Manager → **esp32 by Espressif**. Library Manager → **ESP32Servo** and **U8g2**.
-2. Open `firmware/earthquake_esp32/earthquake_esp32.ino` and fill in your Wi-Fi (the Firebase URL is already set):
+2. Open `firmware/earthquake_esp32/earthquake_esp32.ino`. Set **Tools → Partition Scheme → Huge APP**. Wi-Fi can be set later from the web page by Bluetooth, or typed here (the Firebase URL is already set):
 
 ```cpp
 const char* WIFI_SSID     = "your Wi-Fi";
@@ -177,6 +177,14 @@ Set your model at the top of the ESP32 code: `#define OLED_MODEL 1` (0.96" SSD13
 | After the alarm | "SHAKING STOPPED / AIR CLEARED – press RESET when the area is safe" |
 
 The top bar shows the page dots, Wi-Fi signal bars, and a cloud icon (filled when Firebase is updating, crossed out when offline). Pages change every 5 seconds.
+
+## Wi-Fi setup by Bluetooth (no code changes)
+
+1. Arduino IDE → **Tools → Partition Scheme → "Huge APP (3MB No OTA/1MB SPIFFS)"** (Bluetooth needs the extra space), then upload. You can leave `WIFI_SSID` / `WIFI_PASSWORD` as they are.
+2. Open the web page in **Chrome or Edge** on Android, Windows or Mac (iPhone browsers don't support Web Bluetooth) → **Settings → Set up Wi-Fi by Bluetooth → Connect by Bluetooth**, and pick **QuakeGuard-xxxx**.
+3. The ESP32 scans for networks. Pick yours, type the password, press **Save & connect**. The page shows the result (IP address) live.
+
+The name and password are saved inside the ESP32 and used after every restart. Bluetooth turns off 5 minutes after Wi-Fi connects to free memory. To set it up again or change network, **hold the RESET button while powering on** (two short beeps = saved Wi-Fi forgotten). When the station is offline, the dashboard shows a "Set up Wi-Fi" shortcut.
 
 ## Find stations (like the greenhouse app)
 
